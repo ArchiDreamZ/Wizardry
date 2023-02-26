@@ -1,256 +1,228 @@
 package electroblob.wizardry.entity.construct;
 
-import electroblob.wizardry.Wizardry;
-import electroblob.wizardry.item.ItemArtefact;
-import electroblob.wizardry.item.ItemLightningHammer;
-import electroblob.wizardry.registry.Spells;
-import electroblob.wizardry.registry.WizardryItems;
-import electroblob.wizardry.registry.WizardrySounds;
-import electroblob.wizardry.spell.LightningHammer;
-import electroblob.wizardry.spell.Spell;
-import electroblob.wizardry.util.EntityUtils;
-import electroblob.wizardry.util.MagicDamage;
-import electroblob.wizardry.util.MagicDamage.DamageType;
-import electroblob.wizardry.util.ParticleBuilder;
-import electroblob.wizardry.util.ParticleBuilder.Type;
-import io.netty.buffer.ByteBuf;
-import net.minecraft.block.Block;
-import net.minecraft.block.state.IBlockState;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.EntityLivingBase;
-import net.minecraft.entity.MoverType;
-import net.minecraft.entity.effect.EntityLightningBolt;
-import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.item.ItemStack;
-import net.minecraft.nbt.NBTTagCompound;
-import net.minecraft.util.DamageSource;
-import net.minecraft.util.EnumHand;
-import net.minecraft.util.EnumParticleTypes;
-import net.minecraft.util.math.AxisAlignedBB;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.World;
-
 import java.util.List;
 
-public class EntityHammer extends EntityMagicConstruct {
+import cpw.mods.fml.relauncher.Side;
+import cpw.mods.fml.relauncher.SideOnly;
+import electroblob.wizardry.EnumElement;
+import electroblob.wizardry.EnumParticleType;
+import electroblob.wizardry.MagicDamage;
+import electroblob.wizardry.Wizardry;
+import electroblob.wizardry.WizardryUtilities;
+import electroblob.wizardry.MagicDamage.DamageType;
+import electroblob.wizardry.entity.EntityArc;
+import net.minecraft.block.Block;
+import net.minecraft.entity.EntityLivingBase;
+import net.minecraft.entity.EntityTracker;
+import net.minecraft.entity.effect.EntityLightningBolt;
+import net.minecraft.entity.monster.EntityCreeper;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.network.play.server.S14PacketEntity.S15PacketEntityRelMove;
+import net.minecraft.util.DamageSource;
+import net.minecraft.util.Vec3;
+import net.minecraft.world.World;
+import net.minecraft.world.WorldServer;
 
-	/** How long the hammer has been falling for. */
-	public int fallTime;
+public class EntityHammer extends EntityMagicConstruct
+{
+    /** How long the hammer has been falling for. */
+    public int fallTime;
 
-	public boolean spin = false;
+    public EntityHammer(World par1World)
+    {
+        super(par1World);
+        this.setSize(1.0f, 1.9F);
+        this.noClip = false;
+    }
 
-	public EntityHammer(World world){
-		super(world);
-		this.setSize(1.0f, 1.9F);
-		this.motionX = 0.0D;
-		this.motionY = 0.0D;
-		this.motionZ = 0.0D;
-		this.noClip = false;
-	}
+    public EntityHammer(World world, double x, double y, double z, EntityLivingBase caster, int lifetime, float damageMultiplier)
+    {
+        super(world, x, y, z, caster, lifetime, damageMultiplier);
+        this.setSize(1.1f, 1.9F);
+        this.motionX = 0.0D;
+        this.motionY = 0.0D;
+        this.motionZ = 0.0D;
+        this.noClip = false;
+    }
+    
+    /**
+     * Returns true if the entity is on fire. Used by render to add the fire effect on rendering.
+     */
+    public boolean isBurning()
+    {
+        return false;
+    }
 
-	@Override
-	public boolean isBurning(){
-		return false;
-	}
+    /**
+     * Returns true if other Entities should be prevented from moving through this Entity.
+     */
+    public boolean canBeCollidedWith()
+    {
+        return true;
+    }
 
-	@Override
-	public boolean canBeCollidedWith(){
-		return true;
-	}
-
-	@Override
-	public AxisAlignedBB getCollisionBoundingBox(){
-		return this.getEntityBoundingBox();
-	}
-
-	@Override
-	public void applyEntityCollision(Entity entity){
-		super.applyEntityCollision(entity);
-	}
-
-	@Override
-	public void onUpdate(){
-
-		super.onUpdate();
-
-//		if(this.ticksExisted % 20 == 1 && !this.onGround && world.isRemote){
-//			// Though this sound does repeat, it stops when it hits the ground.
-//			Wizardry.proxy.playMovingSound(this, WizardrySounds.ENTITY_HAMMER_FALLING, WizardrySounds.SPELLS, 3.0f, 1.0f, false);
-//		}
-
-		if(this.world.isRemote && this.ticksExisted % 3 == 0){
-			ParticleBuilder.create(Type.SPARK)
-					.pos(this.posX - 0.5d + rand.nextDouble(), this.posY + 2 * rand.nextDouble(), this.posZ - 0.5d + rand.nextDouble())
-					.spawn(world);
+    /**
+     * Called to update the entity's position/logic.
+     */
+    public void onUpdate(){
+    	
+    	super.onUpdate();
+    	
+    	if(this.ticksExisted % 20 == 1 && !this.onGround && worldObj.isRemote){
+    		// Though this sound does repeat, it stops when it hits the ground.
+    		Wizardry.proxy.playMovingSound(this, "wizardry:electricityb", 3.0f, 1.0f, false);
 		}
+    	
+    	if(this.worldObj.isRemote && this.ticksExisted % 3 == 0){
+			Wizardry.proxy.spawnParticle(EnumParticleType.SPARK, worldObj, this.posX - 0.5d + rand.nextDouble(), this.posY + 2*rand.nextDouble(), this.posZ - 0.5d + rand.nextDouble(), 0, 0, 0, 3);
+    	}
+    	
+    	if(!this.worldObj.isRemote){
 
-		this.prevPosX = this.posX;
-		this.prevPosY = this.posY;
-		this.prevPosZ = this.posZ;
-		++this.fallTime;
-		this.motionY -= 0.03999999910593033D;
-		this.move(MoverType.SELF, this.motionX, this.motionY, this.motionZ);
-		this.motionX *= 0.9800000190734863D;
-		this.motionY *= 0.9800000190734863D;
-		this.motionZ *= 0.9800000190734863D;
-
-		if(this.onGround){
-
-			this.motionX *= 0.699999988079071D;
-			this.motionZ *= 0.699999988079071D;
-			this.motionY *= -0.5D;
-
-			this.rotationPitch = 0;
-			this.spin = false;
-
-			double seekerRange = Spells.lightning_hammer.getProperty(Spell.EFFECT_RADIUS).doubleValue();
-
-			List<EntityLivingBase> targets = EntityUtils.getLivingWithinRadius(seekerRange, this.posX,
-					this.posY + 1, this.posZ, world);
-
-			int maxTargets = Spells.lightning_hammer.getProperty(LightningHammer.SECONDARY_MAX_TARGETS).intValue();
-			while(targets.size() > maxTargets) targets.remove(targets.size() - 1);
-
-			for(EntityLivingBase target : targets){
-
-				if(EntityUtils.isLiving(target) && this.isValidTarget(target)
-						&& target.ticksExisted % Spells.lightning_hammer.getProperty(LightningHammer.ATTACK_INTERVAL).floatValue() == 0){
-
-					if(world.isRemote){
-
-						ParticleBuilder.create(Type.LIGHTNING).pos(posX, posY + height - 0.1, posZ) .target(target).spawn(world);
-
-						ParticleBuilder.spawnShockParticles(world, target.posX,
-								target.posY + target.height, target.posZ);
+            this.prevPosX = this.posX;
+            this.prevPosY = this.posY;
+            this.prevPosZ = this.posZ;
+            ++this.fallTime;
+            this.motionY -= 0.03999999910593033D;
+            this.moveEntity(this.motionX, this.motionY, this.motionZ);
+            this.motionX *= 0.9800000190734863D;
+            this.motionY *= 0.9800000190734863D;
+            this.motionZ *= 0.9800000190734863D;
+            
+	        if(this.onGround){
+	        	
+	        	this.motionX *= 0.699999988079071D;
+                this.motionZ *= 0.699999988079071D;
+                this.motionY *= -0.5D;
+	        	
+	            if(this.ticksExisted % 40 == 0){
+	    		
+		            double seekerRange = 10.0d;
+					
+					List<EntityLivingBase> targets = WizardryUtilities.getEntitiesWithinRadius(seekerRange, this.posX, this.posY+1, this.posZ, worldObj);
+					
+					// For this spell there is no limit to the amount of secondary targets!
+					for(EntityLivingBase target : targets){
+						
+						if(this.isValidTarget(target)){
+							
+							if(!worldObj.isRemote){
+								EntityArc arc = new EntityArc(worldObj);
+								arc.setEndpointCoords(this.posX, this.posY+1, this.posZ,
+										target.posX, target.posY + target.height/2, target.posZ);
+								worldObj.spawnEntityInWorld(arc);
+							}else{
+								for(int j=0;j<8;j++){
+									Wizardry.proxy.spawnParticle(EnumParticleType.SPARK, worldObj, target.posX + worldObj.rand.nextFloat() - 0.5, WizardryUtilities.getEntityFeetPos(target) + target.height/2 + worldObj.rand.nextFloat()*2 - 1, target.posZ + worldObj.rand.nextFloat() - 0.5, 0, 0, 0, 3);
+					    			worldObj.spawnParticle("largesmoke", target.posX + rand.nextFloat(), WizardryUtilities.getEntityFeetPos(target) + target.height/2 + rand.nextFloat(), target.posZ + rand.nextFloat(), 0, 0, 0);
+					    		}
+							}
+							
+							worldObj.playSoundAtEntity(target, "wizardry:arc", 1.0F, rand.nextFloat() * 0.4F + 1.5F);
+							
+							if(this.getCaster() != null){
+								target.attackEntityFrom(MagicDamage.causeIndirectEntityMagicDamage(this, getCaster(), DamageType.SHOCK), 6*damageMultiplier);
+							}else{
+								target.attackEntityFrom(DamageSource.magic, 6*damageMultiplier);
+							}
+						}
 					}
-
-					target.playSound(WizardrySounds.ENTITY_HAMMER_ATTACK, 1.0F, rand.nextFloat() * 0.4F + 1.5F);
-
-					float damage = Spells.lightning_hammer.getProperty(Spell.SPLASH_DAMAGE).floatValue() * damageMultiplier;
-
-					if(this.getCaster() != null){
-						EntityUtils.attackEntityWithoutKnockback(target, MagicDamage.causeIndirectMagicDamage(
-								this, getCaster(), DamageType.SHOCK), damage);
-						EntityUtils.applyStandardKnockback(this, target);
-					}else{
-						target.attackEntityFrom(DamageSource.MAGIC, damage);
-					}
-				}
-			}
-
-		}else{
-
-			if(spin) this.setRotation(this.rotationYaw, this.rotationPitch + 15);
-
-			List<Entity> collided = world.getEntitiesInAABBexcluding(this, this.getCollisionBoundingBox(), e -> e instanceof EntityLivingBase);
-
-			float damage = Spells.lightning_hammer.getProperty(Spell.DIRECT_DAMAGE).floatValue() * damageMultiplier;
-
-			for(Entity entity : collided){
-				entity.attackEntityFrom(MagicDamage.causeIndirectMagicDamage(this, getCaster(), DamageType.SHOCK), damage);
-				//if(entity instanceof EntityLivingBase) ((EntityLivingBase)entity).knockBack(this, 2, -this.motionX, -this.motionZ);
-			}
+	            }
+	    	}
+    	}
+    }
+    
+    public void despawn(){
+    	
+		this.playSound("random.explode", 1.0F, 1.0f);
+		
+		if(this.worldObj.isRemote){
+			this.worldObj.spawnParticle("largeexplode", this.posX, this.posY, this.posZ, 0, 0, 0);
 		}
-	}
-
-	@Override
-	public void despawn(){
-
-		this.playSound(WizardrySounds.ENTITY_HAMMER_EXPLODE, 1.0F, 1.0f);
-
-		if(this.world.isRemote){
-			this.world.spawnParticle(EnumParticleTypes.EXPLOSION_LARGE, this.posX, this.posY, this.posZ, 0, 0, 0);
-		}
-
+		
 		super.despawn();
-	}
+    }
 
-	@Override
-	public void fall(float distance, float damageMultiplier){
-
-		if(world.isRemote){
-
-			for(int i = 0; i < 40; i++){
-				double particleX = this.posX - 1.0d + 2 * rand.nextDouble();
-				double particleZ = this.posZ - 1.0d + 2 * rand.nextDouble();
-				// Roundabout way of getting a block instance for the block the hammer is standing on (if any).
-				IBlockState block = world.getBlockState(new BlockPos(this.posX, this.posY - 2, this.posZ));
+    /**
+     * Called when the mob is falling. Calculates and applies fall damage.
+     */
+    protected void fall(float par1){
+        
+    	if(worldObj.isRemote){
+	        for(int i=0; i<40; i++){
+	        	double particleX = this.posX - 1.0d + 2*rand.nextDouble();
+	        	double particleZ = this.posZ - 1.0d + 2*rand.nextDouble();
+	        	// Roundabout way of getting a block instance for the block the hammer is standing on (if any).
+				Block block = worldObj.getBlock((int)this.posX, (int)this.posY-2, (int)this.posZ);
 
 				if(block != null){
-					world.spawnParticle(EnumParticleTypes.BLOCK_DUST, particleX, this.posY, particleZ,
-							particleX - this.posX, 0, particleZ - this.posZ, Block.getStateId(block));
+					Wizardry.proxy.spawnDigParticle(worldObj, particleX, this.posY, particleZ,
+							particleX - this.posX, 0, particleZ - this.posZ, block);
 				}
-			}
+	        }
+	        
+    	}else{
+			
+    		// For some reason, the hammer falls again on world reload, but only by about 1 block.
+    		if(this.fallDistance > 10){
+    			
+    			// For some reason, the hammer 'lands' one block above the ground first time around - on the SERVER as well.
+    			// Edit: not any more, it seems... maybe because the yOffset thing got deleted.
+    			//this.setPosition(this.posX, this.posY-0.8, this.posZ);
 
-			if(this.fallDistance > 10){
-				EntityUtils.getEntitiesWithinRadius(10, posX, posY, posZ, world, EntityPlayer.class)
-						.forEach(p -> Wizardry.proxy.shakeScreen(p, 6));
-			}
+    			EntityLightningBolt entitylightning = new EntityLightningBolt(worldObj, this.posX, this.posY, this.posZ);
+    			worldObj.addWeatherEffect(entitylightning);
+    			
+				// The last three parameters are the difference in position between server and client. What this is doing
+				// is essentially hijacking the vanilla packet to force the hammer into the right position. (not sure why,
+				// but the packet divides these numbers by 32.)
+				S15PacketEntityRelMove packet = new S15PacketEntityRelMove(this.getEntityId(), (byte)0, (byte)-65, (byte)0);
+				
+				if(this.worldObj instanceof WorldServer){
+					EntityTracker et = ((WorldServer)this.worldObj).getEntityTracker();
+					// This sends a packet to all players tracking the entity.
+					et.func_151248_b(this, packet); 
+				}
+				//packet.yPosition = -65;
+				
+				//PacketDispatcher.sendPacketToAllAround(this.posX, this.posY, this.posZ, 256, this.dimension, packet);
+				//PacketDispatcher.sendPacketToAllPlayers(packet);
+    		}
+    	}
+    }
 
-		}else{
-			// Just to check the hammer has actually fallen from the sky, rather than the block under it being broken.
-			if(this.fallDistance > 10){
-				EntityLightningBolt entitylightning = new EntityLightningBolt(world, this.posX, this.posY, this.posZ,
-						false);
-				world.addWeatherEffect(entitylightning);
-			}
+    /**
+     * (abstract) Protected helper method to write subclass entity data to NBT.
+     */
+    public void writeEntityToNBT(NBTTagCompound nbttagcompound)
+    {
+    	super.writeEntityToNBT(nbttagcompound);
+        nbttagcompound.setByte("Time", (byte)this.fallTime);
+    }
 
-			this.playSound(WizardrySounds.ENTITY_HAMMER_LAND, 1.0F, 0.6f);
-		}
-	}
+    /**
+     * (abstract) Protected helper method to read subclass entity data from NBT.
+     */
+    public void readEntityFromNBT(NBTTagCompound nbttagcompound)
+    {
+    	super.readEntityFromNBT(nbttagcompound);
+        this.fallTime = nbttagcompound.getByte("Time") & 255;
+        // Undoes the manual position change on world reload to prevent the hammer being in the ground.
+		//this.setPosition(this.posX, this.posY+0.8, this.posZ);
+    }
 
-	@Override
-	public boolean processInitialInteract(EntityPlayer player, EnumHand hand){
+    @SideOnly(Side.CLIENT)
+    public float getShadowSize()
+    {
+        return 1.0F;
+    }
 
-		if(player == this.getCaster() && ItemArtefact.isArtefactActive(player, WizardryItems.ring_hammer)
-				&& player.getHeldItemMainhand().isEmpty() && ticksExisted > 10){
-
-			this.setDead();
-
-			ItemStack hammer = new ItemStack(WizardryItems.lightning_hammer);
-			if(!hammer.hasTagCompound()) hammer.setTagCompound(new NBTTagCompound());
-			hammer.getTagCompound().setInteger(ItemLightningHammer.DURATION_NBT_KEY, lifetime);
-			hammer.setItemDamage(ticksExisted);
-			hammer.getTagCompound().setFloat(ItemLightningHammer.DAMAGE_MULTIPLIER_NBT_KEY, damageMultiplier);
-
-			player.setHeldItem(EnumHand.MAIN_HAND, hammer);
-			return true;
-
-		}else{
-			return super.processInitialInteract(player, hand);
-		}
-	}
-
-	@Override
-	public void writeEntityToNBT(NBTTagCompound nbttagcompound){
-		super.writeEntityToNBT(nbttagcompound);
-		nbttagcompound.setByte("Time", (byte)this.fallTime);
-		nbttagcompound.setBoolean("Spin", spin);
-	}
-
-	@Override
-	public void readEntityFromNBT(NBTTagCompound nbttagcompound){
-		super.readEntityFromNBT(nbttagcompound);
-		this.fallTime = nbttagcompound.getByte("Time") & 255;
-		this.spin = nbttagcompound.getBoolean("Spin");
-	}
-
-	// Need to sync the caster so they don't have particles spawned at them
-
-	@Override
-	public void writeSpawnData(ByteBuf data){
-		super.writeSpawnData(data);
-		data.writeBoolean(spin);
-	}
-
-	@Override
-	public void readSpawnData(ByteBuf data){
-		super.readSpawnData(data);
-		spin = data.readBoolean();
-	}
-
-	@Override
-	public boolean isInRangeToRenderDist(double distance){
-		return true;
-	}
+	/**
+     * Checks using a Vec3d to determine if this entity is within range of that vector to be rendered. Args: vec3D
+     */
+    public boolean isInRangeToRenderVec3D(Vec3 par1Vec3)
+    {
+        return true;
+    }
 }

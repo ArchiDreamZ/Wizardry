@@ -1,77 +1,103 @@
 package electroblob.wizardry.spell;
 
+import electroblob.wizardry.EnumElement;
+import electroblob.wizardry.EnumSpellType;
+import electroblob.wizardry.EnumTier;
+import electroblob.wizardry.WizardryUtilities;
 import electroblob.wizardry.entity.construct.EntityIceSpike;
-import electroblob.wizardry.registry.WizardryItems;
-import electroblob.wizardry.util.BlockUtils;
-import electroblob.wizardry.util.GeometryUtils;
-import electroblob.wizardry.util.SpellModifiers;
-import net.minecraft.block.state.IBlockState;
+import net.minecraft.entity.EntityLiving;
 import net.minecraft.entity.EntityLivingBase;
-import net.minecraft.util.EnumFacing;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.item.EnumAction;
+import net.minecraft.util.MathHelper;
+import net.minecraft.util.MovingObjectPosition;
+import net.minecraft.util.MovingObjectPosition.MovingObjectType;
 import net.minecraft.world.World;
 
-public class IceSpikes extends SpellConstructRanged<EntityIceSpike> {
-	
-	public static final String ICE_SPIKE_COUNT = "ice_spike_count";
+public class IceSpikes extends Spell {
 
-	public IceSpikes(){
-		super("ice_spikes", EntityIceSpike::new, true);
-		addProperties(EFFECT_RADIUS, ICE_SPIKE_COUNT, DAMAGE, EFFECT_DURATION, EFFECT_STRENGTH);
-		this.ignoreUncollidables(true);
+	public IceSpikes() {
+		super(EnumTier.ADVANCED, 30, EnumElement.ICE, "ice_spikes", EnumSpellType.ATTACK, 75, EnumAction.none, false);
+	}
+
+	@Override
+	public boolean doesSpellRequirePacket(){
+		return false;
+	}
+
+	@Override
+	public boolean cast(World world, EntityPlayer caster, int ticksInUse, float damageMultiplier, float rangeMultiplier, float durationMultiplier, float blastMultiplier) {
+		
+		MovingObjectPosition rayTrace = WizardryUtilities.rayTrace(20*rangeMultiplier, world, caster, false);
+		
+		if(rayTrace != null && rayTrace.typeOfHit == MovingObjectType.BLOCK && rayTrace.sideHit == 1){
+			
+			if(!world.isRemote){
+				
+				double x = rayTrace.blockX;
+				double y = rayTrace.blockY;
+				double z = rayTrace.blockZ;
+				
+				for(int i=0; i<(int)(18*blastMultiplier); i++){
+					
+					float angle = (float)(world.rand.nextFloat()*Math.PI*2);
+					double radius = 0.5 + world.rand.nextDouble()*2*blastMultiplier;
+					
+					double x1 = x + radius*MathHelper.sin(angle);
+					double z1 = z + radius*MathHelper.cos(angle);
+					double y1 = WizardryUtilities.getNearestFloorLevel(world, MathHelper.floor_double(x1), (int)y, MathHelper.floor_double(z1), 2) - 1;
+					
+					if(y1 > -1){
+						EntityIceSpike icespike = new EntityIceSpike(world, x1, y1, z1, caster, 30 + world.rand.nextInt(15), damageMultiplier);
+						world.spawnEntityInWorld(icespike);
+					}
+				}
+			}
+			
+			caster.swingItem();
+			world.playSoundAtEntity(caster, "wizardry:ice", 1.0F, 1.0F);
+			return true;
+		}
+		return false;
 	}
 	
 	@Override
-	protected boolean spawnConstruct(World world, double x, double y, double z, EnumFacing side, EntityLivingBase caster, SpellModifiers modifiers){
-
-		if(side == null) return false;
-
-		BlockPos blockHit = new BlockPos(x, y, z);
-		if(side.getAxisDirection() == EnumFacing.AxisDirection.NEGATIVE) blockHit = blockHit.offset(side);
-
-		if(world.getBlockState(blockHit).isNormalCube()) return false;
-
-		Vec3d origin = new Vec3d(x, y, z);
-
-		Vec3d pos = origin.add(new Vec3d(side.getOpposite().getDirectionVec()));
+	public boolean cast(World world, EntityLiving caster, EntityLivingBase target, float damageMultiplier, float rangeMultiplier, float durationMultiplier, float blastMultiplier){
 		
-		// Now always spawns a spike exactly at the position aimed at
-		super.spawnConstruct(world, pos.x, pos.y, pos.z, side, caster, modifiers);
-		// -1 because of the one spawned above
-		int quantity = (int)(getProperty(ICE_SPIKE_COUNT).floatValue() * modifiers.get(WizardryItems.blast_upgrade)) - 1;
-
-		float maxRadius = getProperty(EFFECT_RADIUS).floatValue() * modifiers.get(WizardryItems.blast_upgrade);
-
-		for(int i=0; i<quantity; i++){
-
-			double radius = 0.5 + world.rand.nextDouble() * (maxRadius - 0.5);
-
-			// First, generate a random vector of length radius with a z component of zero
-			// Then rotate it so that what was south is now the side that was hit
-			Vec3d offset = Vec3d.fromPitchYaw(world.rand.nextFloat() * 180 - 90, world.rand.nextBoolean() ? 0 : 180)
-					.scale(radius).rotateYaw(side.getHorizontalAngle() * (float)Math.PI/180).rotatePitch(GeometryUtils.getPitch(side) * (float)Math.PI/180);
-
-			if(side.getAxis().isHorizontal()) offset = offset.rotateYaw((float)Math.PI/2);
-
-			Integer surface = BlockUtils.getNearestSurface(world, new BlockPos(origin.add(offset)), side,
-					(int)maxRadius, true, BlockUtils.SurfaceCriteria.basedOn(IBlockState::isNormalCube));
-
-			if(surface != null){
-				Vec3d vec = GeometryUtils.replaceComponent(origin.add(offset), side.getAxis(), surface)
-						.subtract(new Vec3d(side.getDirectionVec()));
-				super.spawnConstruct(world, vec.x, vec.y, vec.z, side, caster, modifiers);
+		if(target != null){
+			
+			if(!world.isRemote){
+				
+				double x = target.posX;
+				double y = target.posY;
+				double z = target.posZ;
+				
+				for(int i=0; i<(int)(18*blastMultiplier); i++){
+					
+					float angle = (float)(world.rand.nextFloat()*Math.PI*2);
+					double radius = 0.5 + world.rand.nextDouble()*2*blastMultiplier;
+					
+					double x1 = x + radius*MathHelper.sin(angle);
+					double z1 = z + radius*MathHelper.cos(angle);
+					double y1 = WizardryUtilities.getNearestFloorLevel(world, MathHelper.floor_double(x1), (int)y, MathHelper.floor_double(z1), 2) - 1;
+					
+					if(y1 > -1){
+						EntityIceSpike icespike = new EntityIceSpike(world, x1, y1, z1, caster, 30 + world.rand.nextInt(15), damageMultiplier);
+						world.spawnEntityInWorld(icespike);
+					}
+				}
 			}
+			caster.swingItem();
+			world.playSoundAtEntity(caster, "wizardry:ice", 1.0F, 1.0F);
+			return true;
 		}
 		
+		return false;
+	}
+	
+	@Override
+	public boolean canBeCastByNPCs(){
 		return true;
 	}
 	
-	@Override
-	protected void addConstructExtras(EntityIceSpike construct, EnumFacing side, EntityLivingBase caster, SpellModifiers modifiers){
-		// In this particular case, lifetime is implemented as a delay instead so is treated differently.
-		construct.lifetime = 30 + construct.world.rand.nextInt(15);
-		construct.setFacing(side);
-	}
-
 }

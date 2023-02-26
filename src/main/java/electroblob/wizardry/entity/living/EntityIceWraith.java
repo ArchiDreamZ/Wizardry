@@ -1,289 +1,279 @@
 package electroblob.wizardry.entity.living;
 
+import cpw.mods.fml.relauncher.Side;
+import cpw.mods.fml.relauncher.SideOnly;
+import electroblob.wizardry.EnumParticleType;
 import electroblob.wizardry.Wizardry;
-import electroblob.wizardry.client.DrawingUtils;
-import electroblob.wizardry.registry.Spells;
-import electroblob.wizardry.registry.WizardrySounds;
-import electroblob.wizardry.util.ParticleBuilder;
-import electroblob.wizardry.util.ParticleBuilder.Type;
-import electroblob.wizardry.util.SpellModifiers;
+import electroblob.wizardry.entity.projectile.EntityIceShard;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.EntityLiving;
 import net.minecraft.entity.EntityLivingBase;
-import net.minecraft.entity.ai.*;
-import net.minecraft.entity.monster.EntityBlaze;
-import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.init.MobEffects;
-import net.minecraft.util.DamageSource;
-import net.minecraft.util.EnumHand;
-import net.minecraft.util.EnumParticleTypes;
-import net.minecraft.util.math.MathHelper;
+import net.minecraft.entity.SharedMonsterAttributes;
+import net.minecraft.entity.ai.EntityAIHurtByTarget;
+import net.minecraft.entity.ai.EntityAILookIdle;
+import net.minecraft.entity.ai.EntityAINearestAttackableTarget;
+import net.minecraft.entity.ai.EntityAIWander;
+import net.minecraft.entity.monster.IMob;
 import net.minecraft.world.World;
-import net.minecraftforge.event.entity.living.LivingSpawnEvent;
-import net.minecraftforge.fml.common.Mod;
-import net.minecraftforge.fml.common.eventhandler.Event;
-import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
-import org.apache.commons.lang3.ArrayUtils;
 
-@Mod.EventBusSubscriber
-public class EntityIceWraith extends EntityBlazeMinion {
+public class EntityIceWraith extends EntitySummonedCreature
+{
+	/** Random offset used in floating behaviour */
+	private float heightOffset = 0.5F;
 
-	/** The version from EntityLivingBase is only used in onLivingUpdate, so it can safely be copied. */
-	private int jumpTicks;
+	/** ticks until heightOffset is randomized */
+	private int heightOffsetUpdateTime;
+	private int field_70846_g;
 
-	/** Creates a new ice wraith in the given world. */
 	public EntityIceWraith(World world){
 		super(world);
+	}
+
+	public EntityIceWraith(World world, double x, double y, double z, EntityLivingBase caster, int lifetime){
+
+		super(world, x, y, z, caster, lifetime);
 		this.isImmuneToFire = false;
+		this.tasks.addTask(1, new EntityAIWander(this, 1.0D));
+		this.tasks.addTask(2, new EntityAILookIdle(this));
+		this.targetTasks.addTask(1, new EntityAIHurtByTarget(this, true));
+		this.targetTasks.addTask(2, new EntityAINearestAttackableTarget(this, EntityLiving.class, 0, false, true, IMob.mobSelector));
+		this.experienceValue = 0;
+	}
+
+	/**
+	 * Returns true if the newer Entity AI code should be run
+	 */
+	protected boolean isAIEnabled()
+	{
+		return false;
 	}
 
 	@Override
-	protected void initEntityAI(){
-		super.initEntityAI();
-		this.tasks.taskEntries.clear();
-		this.tasks.addTask(4, new AIIceShardAttack(this));
-		this.tasks.addTask(5, new EntityAIMoveTowardsRestriction(this, 1.0D));
-		this.tasks.addTask(7, new EntityAIWander(this, 1.0D));
-		this.tasks.addTask(8, new EntityAIWatchClosest(this, EntityPlayer.class, 8.0F));
-		this.tasks.addTask(8, new EntityAILookIdle(this));
+	public boolean hasRangedAttack() {
+		return true;
+	}
+
+	protected void applyEntityAttributes()
+	{
+		super.applyEntityAttributes();
+		this.getEntityAttribute(SharedMonsterAttributes.attackDamage).setBaseValue(6.0D);
+		this.getEntityAttribute(SharedMonsterAttributes.followRange).setBaseValue(16.0D);
+	}
+
+	protected void entityInit()
+	{
+		super.entityInit();
+		this.dataWatcher.addObject(16, new Byte((byte)0));
+	}
+
+	/**
+	 * Returns the sound this mob makes while it's alive.
+	 */
+	protected String getLivingSound()
+	{
+		return "mob.blaze.breathe";
+	}
+
+	/**
+	 * Returns the sound this mob makes when it is hurt.
+	 */
+	protected String getHurtSound()
+	{
+		return "mob.blaze.hit";
+	}
+
+	/**
+	 * Returns the sound this mob makes on death.
+	 */
+	protected String getDeathSound()
+	{
+		return "mob.blaze.death";
+	}
+
+	@SideOnly(Side.CLIENT)
+	public int getBrightnessForRender(float par1)
+	{
+		return 15728880;
+	}
+
+	/**
+	 * Gets how bright this entity is.
+	 */
+	public float getBrightness(float par1)
+	{
+		return 1.0F;
 	}
 
 	@Override
-	protected void spawnParticleEffect(){
-		if(this.world.isRemote){
-			for(int i = 0; i < 15; i++){
-				float brightness = 0.5f + (rand.nextFloat() / 2);
-				ParticleBuilder.create(Type.SPARKLE, this)
-				.vel(0, 0.05f, 0)
-				.time(20 + rand.nextInt(10))
-				.clr(brightness, brightness + 0.1f, 1.0f)
-				.spawn(world);
+	public void onSpawn(){
+		if(this.worldObj.isRemote){
+			for(int i=0;i<15;i++){
+				float brightness = 0.5f + (rand.nextFloat()/2);
+				Wizardry.proxy.spawnParticle(EnumParticleType.SPARKLE, worldObj, this.posX - 0.5d + rand.nextDouble(), this.posY + this.height/2 - 0.5d + rand.nextDouble(), this.posZ - 0.5d + rand.nextDouble(), 0, 0.05f, 0, 20 + rand.nextInt(10), brightness, brightness + 0.1f, 1.0f);
 			}
 		}
 	}
 
 	@Override
-	public int getAnimationColour(float animationProgress){
-		return DrawingUtils.mix(0xffffff, 0x73e1ff, animationProgress);
+	public void despawn(){
+		if(this.worldObj.isRemote){
+			for(int i=0;i<15;i++){
+				float brightness = 0.5f + (rand.nextFloat()/2);
+				Wizardry.proxy.spawnParticle(EnumParticleType.SPARKLE, worldObj, this.posX - 0.5d + rand.nextDouble(), this.posY + this.height/2 - 0.5d + rand.nextDouble(), this.posZ - 0.5d + rand.nextDouble(), 0, 0.05f, 0, 20 + rand.nextInt(10), brightness, brightness + 0.1f, 1.0f);
+			}
+		}
+		super.despawn();
 	}
 
-	@Override
-	public void onLivingUpdate(){
+	/**
+	 * Called frequently so the entity can update its state every tick as required. For example, zombies and skeletons
+	 * use this to react to sunlight and start to burn.
+	 */
+	public void onLivingUpdate()
+	{
 
-		if(!this.onGround && this.motionY < 0.0D){
+		if (!this.worldObj.isRemote)
+		{
+			/*
+            if (this.isWet())
+            {
+                this.attackEntityFrom(DamageSource.drown, 1.0F);
+            }
+			 */
+
+			--this.heightOffsetUpdateTime;
+
+			if (this.heightOffsetUpdateTime <= 0)
+			{
+				this.heightOffsetUpdateTime = 100;
+				this.heightOffset = 0.5F + (float)this.rand.nextGaussian() * 3.0F;
+			}
+
+			if (this.getEntityToAttack() != null && this.getEntityToAttack().posY + (double)this.getEntityToAttack().getEyeHeight() > this.posY + (double)this.getEyeHeight() + (double)this.heightOffset)
+			{
+				this.motionY += (0.30000001192092896D - this.motionY) * 0.30000001192092896D;
+			}
+		}
+
+		if (this.rand.nextInt(24) == 0)
+		{
+			this.worldObj.playSoundEffect(this.posX + 0.5D, this.posY + 0.5D, this.posZ + 0.5D, "wizardry:wind", 0.3F + this.rand.nextFloat()/4, this.rand.nextFloat() * 0.7F + 1.4F);
+		}
+
+		if (!this.onGround && this.motionY < 0.0D)
+		{
 			this.motionY *= 0.6D;
 		}
 
-		if(this.rand.nextInt(24) == 0){
-			this.playSound(WizardrySounds.ENTITY_ICE_WRAITH_AMBIENT, 0.3F + this.rand.nextFloat() / 4,
-					this.rand.nextFloat() * 0.7F + 1.4F);
+		for (int i = 0; i < 2; ++i)
+		{
+			this.worldObj.spawnParticle("cloud", this.posX + (this.rand.nextDouble() - 0.5D) * (double)this.width, this.posY + this.rand.nextDouble() * (double)this.height, this.posZ + (this.rand.nextDouble() - 0.5D) * (double)this.width, 0.0D, 0.0D, 0.0D);
 		}
 
-		if(this.world.isRemote){
-			for(int i = 0; i < 2; ++i){
-				this.world.spawnParticle(EnumParticleTypes.CLOUD,
-						this.posX + (this.rand.nextDouble() - 0.5D) * (double)this.width,
-						this.posY + this.rand.nextDouble() * (double)this.height,
-						this.posZ + (this.rand.nextDouble() - 0.5D) * (double)this.width, 0.0D, 0.0D, 0.0D);
-			}
-		}
-
-		// Replaces super call.
-		this.livingBaseUpdate();
+		super.onLivingUpdate();
 	}
 
 	/**
-	 * Copied from {@link EntityLivingBase#onLivingUpdate()}. The only change is removal of the updateElytra() call
-	 * since that's irrelevant here. In actual fact, neither EntityMob nor EntityLiving has any code in its version of
-	 * this method that is of use. This isn't exactly ideal, but it's the lesser of two evils since the alternative is
-	 * copying the entire EntityBlaze class and its renderer. All to remove one particle effect...
+	 * Basic mob attack. Default to touch of death in EntityCreature. Overridden by each mob to define their attack.
 	 */
-	// ... demonstrating why critical methods should delegate any non-critical functionality (like particles) to
-	// separate protected methods.
-	private void livingBaseUpdate(){
-
-		if(this.jumpTicks > 0){
-			--this.jumpTicks;
+	protected void attackEntity(Entity target, float par2)
+	{
+		if (this.attackTime <= 0 && par2 < 2.0F && target.boundingBox.maxY > this.boundingBox.minY && target.boundingBox.minY < this.boundingBox.maxY)
+		{
+			this.attackTime = 20;
+			this.attackEntityAsMob(target);
 		}
+		else if (par2 < 30.0F)
+		{
+			double d0 = target.posX - this.posX;
+			double d1 = target.boundingBox.minY + (double)(target.height / 2.0F) - (this.posY + (double)(this.height / 2.0F));
+			double d2 = target.posZ - this.posZ;
 
-		if(this.newPosRotationIncrements > 0 && !this.canPassengerSteer()){
-			double d0 = this.posX + (this.interpTargetX - this.posX) / (double)this.newPosRotationIncrements;
-			double d1 = this.posY + (this.interpTargetY - this.posY) / (double)this.newPosRotationIncrements;
-			double d2 = this.posZ + (this.interpTargetZ - this.posZ) / (double)this.newPosRotationIncrements;
-			double d3 = MathHelper.wrapDegrees(this.interpTargetYaw - (double)this.rotationYaw);
-			this.rotationYaw = (float)((double)this.rotationYaw + d3 / (double)this.newPosRotationIncrements);
-			this.rotationPitch = (float)((double)this.rotationPitch
-					+ (this.interpTargetPitch - (double)this.rotationPitch) / (double)this.newPosRotationIncrements);
-			--this.newPosRotationIncrements;
-			this.setPosition(d0, d1, d2);
-			this.setRotation(this.rotationYaw, this.rotationPitch);
-		}else if(!this.isServerWorld()){
-			this.motionX *= 0.98D;
-			this.motionY *= 0.98D;
-			this.motionZ *= 0.98D;
-		}
+			if (this.attackTime == 0)
+			{
+				++this.field_70846_g;
 
-		if(Math.abs(this.motionX) < 0.003D){
-			this.motionX = 0.0D;
-		}
+				if (this.field_70846_g == 1)
+				{
+					this.attackTime = 60;
+					//this.func_70844_e(true);
+				}
+				else if (this.field_70846_g <= 4)
+				{
+					this.attackTime = 6;
+				}
+				else
+				{
+					this.attackTime = 100;
+					this.field_70846_g = 0;
+					//this.func_70844_e(false);
+				}
 
-		if(Math.abs(this.motionY) < 0.003D){
-			this.motionY = 0.0D;
-		}
+				if (this.field_70846_g > 1)
+				{
+					this.playSound("wizardry:ice", 1.0F, rand.nextFloat() * 0.4F + 1.4F);
 
-		if(Math.abs(this.motionZ) < 0.003D){
-			this.motionZ = 0.0D;
-		}
-
-		this.world.profiler.startSection("ai");
-
-		if(this.isMovementBlocked()){
-			this.isJumping = false;
-			this.moveStrafing = 0.0F;
-			this.moveForward = 0.0F;
-			this.randomYawVelocity = 0.0F;
-		}else if(this.isServerWorld()){
-			this.world.profiler.startSection("newAi");
-			this.updateEntityActionState();
-			this.world.profiler.endSection();
-		}
-
-		this.world.profiler.endSection();
-		this.world.profiler.startSection("jump");
-
-		if(this.isJumping){
-			if(this.isInWater()){
-				this.handleJumpWater();
-			}else if(this.isInLava()){
-				this.handleJumpLava();
-			}else if(this.onGround && this.jumpTicks == 0){
-				this.jump();
-				this.jumpTicks = 10;
+					EntityIceShard iceshard = new EntityIceShard(this.worldObj, this, target, 2, 4, 1);
+					iceshard.setShootingEntity(this.getCaster());
+					//iceshard.posY = this.posY + (double)(this.height / 2.0F) + 0.5D;
+					//iceshard.setShootingEntity(this);
+					this.worldObj.spawnEntityInWorld(iceshard);
+				}
 			}
-		}else{
-			this.jumpTicks = 0;
-		}
 
-		this.world.profiler.endSection();
-		this.world.profiler.startSection("travel");
-		this.moveStrafing *= 0.98F;
-		this.moveForward *= 0.98F;
-		this.randomYawVelocity *= 0.9F;
-		this.travel(this.moveStrafing, this.moveVertical, this.moveForward);
-		this.world.profiler.endSection();
-		this.world.profiler.startSection("push");
-		this.collideWithNearbyEntities();
-		this.world.profiler.endSection();
-	}
-
-	@Override
-	public boolean attackEntityFrom(DamageSource source, float amount){
-		// Removes the damage from being wet that applies to blazes by checking if the mob is actually drowning.
-		if(source == DamageSource.DROWN && (this.getAir() > 0 || this.isPotionActive(MobEffects.WATER_BREATHING))){
-			// In this case, the ice wraith is not actually drowning, so cancel the damage.
-			return false;
-		}else{
-			return super.attackEntityFrom(source, amount);
-		}
-	}
-
-	@Override
-	public boolean isBurning(){
-		// Uses the datawatcher on both sides because fire is private to Entity (and I'm not using reflection here).
-		// This should work, but there may be some issues with updating, so if it doesn't work, copy the
-		// version from Entity and use reflection to access the fire field.
-		return this.getFlag(0);
-	}
-
-	@Override
-	public boolean getCanSpawnHere(){
-		return super.getCanSpawnHere() && this.isValidLightLevel();
-	}
-
-	@SubscribeEvent
-	public static void onCheckSpawnEvent(LivingSpawnEvent.CheckSpawn event){
-		// We have no way of checking if it's a spawner in getCanSpawnHere() so this has to be done here instead
-		if(event.getEntityLiving() instanceof EntityLightningWraith && !event.isSpawner()){
-			if(!ArrayUtils.contains(Wizardry.settings.mobSpawnDimensions, event.getWorld().provider.getDimension()))
-				event.setResult(Event.Result.DENY);
+			this.rotationYaw = (float)(Math.atan2(d2, d0) * 180.0D / Math.PI) - 90.0F;
+			this.hasAttacked = true;
 		}
 	}
 
 	/**
-	 * Copied straight from EntityBlaze.AIFireballAttack, with the only changes being replacement of fireball spawning
-	 * with a one-liner call to WizardryLoot.iceShard.cast(...) and the removal of redundant local variables.
+	 * Called when the mob is falling. Calculates and applies fall damage.
 	 */
-	static class AIIceShardAttack extends EntityAIBase {
+	protected void fall(float par1) {}
 
-		private final EntityBlaze blaze;
-		private int attackStep;
-		private int attackTime;
+	/**
+	 * Returns the item ID for the item the mob drops on death.
+	 */
+	protected int getDropItemId()
+	{
+		return -1;
+	}
 
-		public AIIceShardAttack(EntityBlaze blazeIn){
-			this.blaze = blazeIn;
-			this.setMutexBits(3);
+	/**
+	 * Drop 0-2 items of this living's type. @param par1 - Whether this entity has recently been hit by a player. @param
+	 * par2 - Level of Looting used to kill this mob.
+	 */
+	protected void dropFewItems(boolean par1, int par2)
+	{
+
+	}
+
+	public boolean func_70845_n()
+	{
+		return (this.dataWatcher.getWatchableObjectByte(16) & 1) != 0;
+	}
+
+	public void func_70844_e(boolean par1)
+	{
+		byte b0 = this.dataWatcher.getWatchableObjectByte(16);
+
+		if (par1)
+		{
+			b0 = (byte)(b0 | 1);
+		}
+		else
+		{
+			b0 &= -2;
 		}
 
-		@Override
-		public boolean shouldExecute(){
-			EntityLivingBase entitylivingbase = this.blaze.getAttackTarget();
-			return entitylivingbase != null && entitylivingbase.isEntityAlive();
-		}
+		this.dataWatcher.updateObject(16, Byte.valueOf(b0));
+	}
 
-		@Override
-		public void startExecuting(){
-			this.attackStep = 0;
-		}
-
-		@Override
-		public void resetTask(){
-			// This might be called setOnFire, but what it really controls is whether the wraith is in attack mode.
-			this.blaze.setOnFire(false);
-		}
-
-		@Override
-		public void updateTask(){
-			--this.attackTime;
-			EntityLivingBase entitylivingbase = this.blaze.getAttackTarget();
-			if(entitylivingbase == null) return; // Dynamic stealth breaks things, let's un-break them
-			double d0 = this.blaze.getDistanceSq(entitylivingbase);
-
-			if(d0 < 4.0D){
-				if(this.attackTime <= 0){
-					this.attackTime = 20;
-					this.blaze.attackEntityAsMob(entitylivingbase);
-				}
-
-				this.blaze.getMoveHelper().setMoveTo(entitylivingbase.posX, entitylivingbase.posY,
-						entitylivingbase.posZ, 1.0D);
-			}else if(d0 < 256.0D){
-				if(this.attackTime <= 0){
-					++this.attackStep;
-
-					if(this.attackStep == 1){
-						this.attackTime = 60;
-						this.blaze.setOnFire(true);
-					}else if(this.attackStep <= 4){
-						this.attackTime = 6;
-					}else{
-						this.attackTime = 100;
-						this.attackStep = 0;
-						this.blaze.setOnFire(false);
-					}
-
-					if(this.attackStep > 1){
-						// Proof, if it were at all needed, of the elegance and versatility of the spell system.
-						Spells.ice_shard.cast(this.blaze.world, this.blaze, EnumHand.MAIN_HAND, 0, entitylivingbase,
-								new SpellModifiers());
-					}
-				}
-
-				this.blaze.getLookHelper().setLookPositionWithEntity(entitylivingbase, 10.0F, 10.0F);
-			}else{
-				this.blaze.getNavigator().clearPath();
-				this.blaze.getMoveHelper().setMoveTo(entitylivingbase.posX, entitylivingbase.posY,
-						entitylivingbase.posZ, 1.0D);
-			}
-
-			super.updateTask();
-		}
+	/**
+	 * Checks to make sure the light is not too bright where the mob is spawning
+	 */
+	protected boolean isValidLightLevel()
+	{
+		return true;
 	}
 }

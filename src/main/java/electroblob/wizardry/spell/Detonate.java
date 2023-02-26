@@ -1,68 +1,95 @@
 package electroblob.wizardry.spell;
 
-import electroblob.wizardry.item.SpellActions;
-import electroblob.wizardry.registry.WizardryItems;
-import electroblob.wizardry.util.EntityUtils;
-import electroblob.wizardry.util.MagicDamage;
-import electroblob.wizardry.util.MagicDamage.DamageType;
-import electroblob.wizardry.util.SpellModifiers;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.EntityLivingBase;
-import net.minecraft.util.EnumFacing;
-import net.minecraft.util.EnumParticleTypes;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.World;
-
 import java.util.List;
 
-public class Detonate extends SpellRay {
+import electroblob.wizardry.EnumElement;
+import electroblob.wizardry.EnumSpellType;
+import electroblob.wizardry.EnumTier;
+import electroblob.wizardry.MagicDamage;
+import electroblob.wizardry.WizardryUtilities;
+import electroblob.wizardry.MagicDamage.DamageType;
+import net.minecraft.entity.EntityLiving;
+import net.minecraft.entity.EntityLivingBase;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.item.EnumAction;
+import net.minecraft.util.MovingObjectPosition;
+import net.minecraft.util.MovingObjectPosition.MovingObjectType;
+import net.minecraft.world.World;
 
-	// More descriptive/accurate than just "damage"
-	public static final String MAX_DAMAGE = "max_damage";
+public class Detonate extends Spell {
 
-	public Detonate(){
-		super("detonate", SpellActions.POINT, false);
-		this.soundValues(4, 0.7f, 0.14f);
-		this.ignoreLivingEntities(true);
-		addProperties(MAX_DAMAGE, BLAST_RADIUS);
+	public Detonate() {
+		super(EnumTier.ADVANCED, 45, EnumElement.FIRE, "detonate", EnumSpellType.ATTACK, 50, EnumAction.none, false);
 	}
 
 	@Override
-	protected boolean onEntityHit(World world, Entity target, Vec3d hit, EntityLivingBase caster, Vec3d origin, int ticksInUse, SpellModifiers modifiers){
+	public boolean cast(World world, EntityPlayer caster, int ticksInUse, float damageMultiplier, float rangeMultiplier, float durationMultiplier, float blastMultiplier) {
+		
+		MovingObjectPosition rayTrace = WizardryUtilities.rayTrace(16*rangeMultiplier, world, caster, false);
+		
+		if(rayTrace != null && rayTrace.typeOfHit == MovingObjectType.BLOCK){
+			if(!world.isRemote){
+				List targets = WizardryUtilities.getEntitiesWithinRadius(3.0d*blastMultiplier, (rayTrace.blockX+0.5), (rayTrace.blockY+0.5), (rayTrace.blockZ+0.5), world);
+				for(int i=0;i<targets.size();i++){
+					if(targets.get(i) instanceof EntityLivingBase){
+						((EntityLivingBase)targets.get(i)).attackEntityFrom(MagicDamage.causeDirectMagicDamage(caster, DamageType.BLAST),
+								//Damage decreases with distance but cannot be less than 0, naturally.
+								Math.max(12.0f - (float)((EntityLivingBase)targets.get(i)).getDistance((rayTrace.blockX+0.5), (rayTrace.blockY+0.5), (rayTrace.blockZ+0.5))*4, 0) * damageMultiplier);
+					}
+				}
+				world.playSoundEffect((rayTrace.blockX+0.5), (rayTrace.blockY+0.5), (rayTrace.blockZ+0.5), "random.explode", 4.0F, (1.0F + (world.rand.nextFloat() - world.rand.nextFloat()) * 0.2F) * 0.7F);
+			}
+			if(world.isRemote){
+				double dx = (rayTrace.blockX+0.5) - caster.posX;
+				double dy = (rayTrace.blockY+0.5) - WizardryUtilities.getPlayerEyesPos(caster);
+				double dz = (rayTrace.blockZ+0.5) - caster.posZ;
+				world.spawnParticle("hugeexplosion", (rayTrace.blockX+0.5), (rayTrace.blockY+0.5), (rayTrace.blockZ+0.5), 0, 0, 0);
+				for(int i=1;i<5;i++){
+	    			world.spawnParticle("flame", caster.posX + (i*(dx/5)) + world.rand.nextFloat()/5, caster.posY + (i*(dy/5)) + world.rand.nextFloat()/5, caster.posZ + (i*(dz/5)) + world.rand.nextFloat()/5, 0, 0, 0);
+	    			world.spawnParticle("flame", caster.posX + (i*(dx/5)) + world.rand.nextFloat()/5, caster.posY + (i*(dy/5)) + world.rand.nextFloat()/5, caster.posZ + (i*(dz/5)) + world.rand.nextFloat()/5, 0, 0, 0);
+	    		}
+			}
+			caster.swingItem();
+			return true;
+		}
 		return false;
 	}
 
 	@Override
-	protected boolean onBlockHit(World world, BlockPos pos, EnumFacing side, Vec3d hit, EntityLivingBase caster, Vec3d origin, int ticksInUse, SpellModifiers modifiers){
+	public boolean cast(World world, EntityLiving caster, EntityLivingBase target, float damageMultiplier, float rangeMultiplier, float durationMultiplier, float blastMultiplier){
 		
-		if(!world.isRemote){
-			
-			List<EntityLivingBase> targets = EntityUtils.getLivingWithinRadius(getProperty(BLAST_RADIUS).doubleValue()
-					* modifiers.get(WizardryItems.blast_upgrade), pos.getX(), pos.getY(), pos.getZ(), world);
-			
-			for(EntityLivingBase target : targets){
-				target.attackEntityFrom(MagicDamage.causeDirectMagicDamage(caster, DamageType.BLAST),
-						// Damage decreases with distance but cannot be less than 0, naturally.
-						Math.max(getProperty(MAX_DAMAGE).floatValue() - (float)target.getDistance(pos.getX() + 0.5,
-								pos.getY() + 0.5, pos.getZ() + 0.5) * 4, 0) * modifiers.get(SpellModifiers.POTENCY));
+		if(target != null){
+			if(!world.isRemote){
+				List targets = WizardryUtilities.getEntitiesWithinRadius(3.0d, target.posX, target.posY, target.posZ, world);
+				for(int i=0;i<targets.size();i++){
+					if(targets.get(i) instanceof EntityLivingBase){
+						((EntityLivingBase)targets.get(i)).attackEntityFrom(MagicDamage.causeDirectMagicDamage(caster, DamageType.BLAST),
+								// Damage decreases with distance but cannot be less than 0, naturally.
+								Math.max(12.0f - (float)((EntityLivingBase)targets.get(i)).getDistance(target.posX, target.posY, target.posZ)*4, 0) * damageMultiplier);
+					}
+				}
+				world.playSoundEffect(target.posX, target.posY, target.posZ, "random.explode", 4.0F, (1.0F + (world.rand.nextFloat() - world.rand.nextFloat()) * 0.2F) * 0.7F);
 			}
-			
-		}else{
-			world.spawnParticle(EnumParticleTypes.EXPLOSION_HUGE, pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5, 0, 0, 0);
+			if(world.isRemote){
+				double dx = target.posX - caster.posX;
+				double dy = target.posY - (caster.posY + caster.getEyeHeight());
+				double dz = target.posZ - caster.posZ;
+				world.spawnParticle("hugeexplosion", target.posX, target.posY, target.posZ, 0, 0, 0);
+				for(int i=1;i<5;i++){
+	    			world.spawnParticle("flame", caster.posX + (i*(dx/5)) + world.rand.nextFloat()/5, caster.posY + caster.getEyeHeight() + (i*(dy/5)) + world.rand.nextFloat()/5, caster.posZ + (i*(dz/5)) + world.rand.nextFloat()/5, 0, 0, 0);
+	    			world.spawnParticle("flame", caster.posX + (i*(dx/5)) + world.rand.nextFloat()/5, caster.posY + caster.getEyeHeight() + (i*(dy/5)) + world.rand.nextFloat()/5, caster.posZ + (i*(dz/5)) + world.rand.nextFloat()/5, 0, 0, 0);
+	    		}
+			}
+			caster.swingItem();
+			return true;
 		}
 		
-		return true;
-	}
-
-	@Override
-	protected boolean onMiss(World world, EntityLivingBase caster, Vec3d origin, Vec3d direction, int ticksInUse, SpellModifiers modifiers){
 		return false;
 	}
 	
 	@Override
-	protected void spawnParticle(World world, double x, double y, double z, double vx, double vy, double vz){
-		world.spawnParticle(EnumParticleTypes.FLAME, x, y, z, 0, 0, 0);
+	public boolean canBeCastByNPCs(){
+		return true;
 	}
 
 }

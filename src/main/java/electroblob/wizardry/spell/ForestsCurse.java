@@ -1,65 +1,60 @@
 package electroblob.wizardry.spell;
 
-import electroblob.wizardry.item.SpellActions;
-import electroblob.wizardry.registry.WizardryItems;
-import electroblob.wizardry.util.EntityUtils;
-import electroblob.wizardry.util.MagicDamage;
-import electroblob.wizardry.util.MagicDamage.DamageType;
-import electroblob.wizardry.util.ParticleBuilder;
-import electroblob.wizardry.util.ParticleBuilder.Type;
-import electroblob.wizardry.util.SpellModifiers;
+import java.util.List;
+
+import electroblob.wizardry.EnumElement;
+import electroblob.wizardry.EnumParticleType;
+import electroblob.wizardry.EnumSpellType;
+import electroblob.wizardry.EnumTier;
+import electroblob.wizardry.MagicDamage;
+import electroblob.wizardry.Wizardry;
+import electroblob.wizardry.WizardryUtilities;
+import electroblob.wizardry.MagicDamage.DamageType;
 import net.minecraft.entity.EntityLivingBase;
-import net.minecraft.init.MobEffects;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.item.EnumAction;
+import net.minecraft.potion.Potion;
 import net.minecraft.potion.PotionEffect;
-import net.minecraft.util.DamageSource;
-import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
 
-import javax.annotation.Nullable;
+public class ForestsCurse extends Spell {
 
-public class ForestsCurse extends SpellAreaEffect {
-
-	public ForestsCurse(){
-		super("forests_curse", SpellActions.POINT_UP, false);
-		this.alwaysSucceed(true);
-		this.soundValues(1, 1.1f, 0.2f);
-		addProperties(DAMAGE, EFFECT_DURATION, EFFECT_STRENGTH);
+	public ForestsCurse() {
+		super(EnumTier.MASTER, 75, EnumElement.EARTH, "forests_curse", EnumSpellType.ATTACK, 1000, EnumAction.bow, false);
 	}
-	
+
 	@Override
-	protected boolean affectEntity(World world, Vec3d origin, @Nullable EntityLivingBase caster, EntityLivingBase target, int targetCount, int ticksInUse, SpellModifiers modifiers){
+	public boolean cast(World world, EntityPlayer caster, int ticksInUse, float damageMultiplier, float rangeMultiplier, float durationMultiplier, float blastMultiplier) {
 		
-		if(!MagicDamage.isEntityImmune(DamageType.POISON, target) && EntityUtils.isLiving(target)){
-
-			DamageSource source = caster != null ? MagicDamage.causeDirectMagicDamage(caster, DamageType.POISON) : DamageSource.MAGIC;
-			target.attackEntityFrom(source, getProperty(DAMAGE).floatValue() * modifiers.get(SpellModifiers.POTENCY));
-
-			int bonusAmplifier = SpellBuff.getStandardBonusAmplifier(modifiers.get(SpellModifiers.POTENCY));
-			int duration = (int)(getProperty(EFFECT_DURATION).floatValue() * modifiers.get(WizardryItems.duration_upgrade));
-			int amplifier = (int)(getProperty(EFFECT_STRENGTH).floatValue() + bonusAmplifier);
-
-			target.addPotionEffect(new PotionEffect(MobEffects.POISON, duration, amplifier));
-			target.addPotionEffect(new PotionEffect(MobEffects.SLOWNESS, duration, amplifier));
-			target.addPotionEffect(new PotionEffect(MobEffects.WEAKNESS, duration, amplifier));
+		List<EntityLivingBase> targets = WizardryUtilities.getEntitiesWithinRadius(5.0d*blastMultiplier, caster.posX, caster.posY, caster.posZ, world);
+		
+		for(EntityLivingBase target : targets){
+			if(WizardryUtilities.isValidTarget(caster, target) && !MagicDamage.isEntityImmune(DamageType.POISON, target)){
+				target.attackEntityFrom(MagicDamage.causeDirectMagicDamage(caster, DamageType.POISON), 4.0f * damageMultiplier);
+				target.addPotionEffect(new PotionEffect(Potion.poison.id, (int)(140*durationMultiplier), 2));
+				target.addPotionEffect(new PotionEffect(Potion.moveSlowdown.id, (int)(140*durationMultiplier), 2));
+				target.addPotionEffect(new PotionEffect(Potion.weakness.id, (int)(140*durationMultiplier), 2));
+			}
 		}
+		
+		if(world.isRemote){
+			for(int i=0;i<50*blastMultiplier;i++){
+        		double radius = (1 + world.rand.nextDouble()*4)*blastMultiplier;
+        		double angle = world.rand.nextDouble()*Math.PI*2;
+				float brightness = world.rand.nextFloat()/4;
+				Wizardry.proxy.spawnParticle(EnumParticleType.DARK_MAGIC, world, caster.posX + radius*Math.cos(angle), WizardryUtilities.getPlayerEyesPos(caster) + 0.5, caster.posZ + radius*Math.sin(angle),
+						0, -0.2, 0, 0, 0.05f+brightness, 0.2f+brightness, 0.0f);
+				brightness = world.rand.nextFloat()/4;
+				Wizardry.proxy.spawnParticle(EnumParticleType.SPARKLE, world, caster.posX + radius*Math.cos(angle), WizardryUtilities.getPlayerEyesPos(caster) + 0.5, caster.posZ + radius*Math.sin(angle),
+						0, -0.05, 0, 50, 0.1f+brightness, 0.2f+brightness, 0.0f);
+				Wizardry.proxy.spawnParticle(EnumParticleType.LEAF, world, caster.posX + radius*Math.cos(angle), WizardryUtilities.getPlayerEyesPos(caster) + 0.5, caster.posZ + radius*Math.sin(angle), 0, -0.01, 0, 40 + world.rand.nextInt(12));
 
+			}
+		}
+		
+		world.playSoundAtEntity(caster, "mob.wither.spawn", 1.0F, world.rand.nextFloat() * 0.2F + 1.0F);
 		return true;
 	}
-	
-	@Override
-	protected void spawnParticle(World world, double x, double y, double z){
-		
-		y += 2; // Moves the particles up to the caster's head level
-		
-		float brightness = world.rand.nextFloat() / 4;
-		ParticleBuilder.create(Type.DARK_MAGIC).pos(x, y, z).vel(0, -0.2, 0)
-		.clr(0.05f + brightness, 0.2f + brightness, 0).spawn(world);
-		
-		brightness = world.rand.nextFloat() / 4;
-		ParticleBuilder.create(Type.SPARKLE).pos(x, y, z).vel(0, -0.05, 0).time(50)
-		.clr(0.1f + brightness, 0.2f + brightness, 0).spawn(world);
-		
-		ParticleBuilder.create(Type.LEAF).pos(x, y, z).vel(0, -0.01, 0).time(40 + world.rand.nextInt(12)).spawn(world);
-	}
+
 
 }

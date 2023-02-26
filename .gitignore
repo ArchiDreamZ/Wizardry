@@ -1,29 +1,28 @@
-# eclipse
-bin
+# mac os
+.DS_Store
+
+# forge / gradle
+.gradle
+build/
+out/
+classes/
+run/
+
+# eclipse 
 *.launch
 .settings
-.metadata
 .classpath
 .project
+eclipse
 
-# idea
-out
+.idea/
+*.iml
 *.ipr
 *.iws
-*.iml
-.idea
 
-# gradle
-build
-.gradle
+# vscode
 
-# other
-eclipse
-run
-logs
-/misc
-/libs
-libs_src
-libsfordeobf
-generated
-Thumbs.db
+.settings/
+.vscode/
+bin/
+.classpath

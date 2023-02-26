@@ -1,120 +1,90 @@
 package electroblob.wizardry.block;
 
-import electroblob.wizardry.registry.Spells;
-import electroblob.wizardry.spell.Spell;
-import electroblob.wizardry.tileentity.TileEntityPlayerSave;
-import electroblob.wizardry.util.AllyDesignationSystem;
-import electroblob.wizardry.util.MagicDamage;
-import electroblob.wizardry.util.MagicDamage.DamageType;
-import net.minecraft.block.Block;
-import net.minecraft.block.ITileEntityProvider;
-import net.minecraft.block.SoundType;
-import net.minecraft.block.material.Material;
-import net.minecraft.block.state.IBlockState;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.EntityLivingBase;
-import net.minecraft.init.MobEffects;
-import net.minecraft.item.Item;
-import net.minecraft.potion.PotionEffect;
-import net.minecraft.tileentity.TileEntity;
-import net.minecraft.util.BlockRenderLayer;
-import net.minecraft.util.DamageSource;
-import net.minecraft.util.EnumBlockRenderType;
-import net.minecraft.util.EnumFacing;
-import net.minecraft.util.math.AxisAlignedBB;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.IBlockAccess;
-import net.minecraft.world.World;
-
 import java.util.Random;
 
-public class BlockSnare extends Block implements ITileEntityProvider {
+import electroblob.wizardry.EnumElement;
+import electroblob.wizardry.MagicDamage;
+import electroblob.wizardry.MagicDamage.DamageType;
+import electroblob.wizardry.WizardryUtilities;
+import electroblob.wizardry.tileentity.TileEntityPlayerSave;
+import net.minecraft.block.Block;
+import net.minecraft.block.BlockContainer;
+import net.minecraft.block.material.Material;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.EntityLivingBase;
+import net.minecraft.item.Item;
+import net.minecraft.potion.Potion;
+import net.minecraft.potion.PotionEffect;
+import net.minecraft.tileentity.TileEntity;
+import net.minecraft.util.AxisAlignedBB;
+import net.minecraft.util.DamageSource;
+import net.minecraft.world.World;
+import net.minecraftforge.common.util.ForgeDirection;
 
-	private static final AxisAlignedBB AABB = new AxisAlignedBB(0.0f, 0.0f, 0.0f, 1.0f, 0.0625f, 1.0f);
+public class BlockSnare extends BlockContainer {
 
-	public BlockSnare(Material material){
-		super(material);
-		this.setSoundType(SoundType.PLANT);
+	public BlockSnare(Material par2Material){
+		super(par2Material);
+        this.setBlockBounds(0.0f, 0.0f, 0.0f, 1.0f, 0.0625f, 1.0f);
 	}
-
+	
 	@Override
-	public AxisAlignedBB getBoundingBox(IBlockState state, IBlockAccess source, BlockPos pos){
-		return AABB;
+	public AxisAlignedBB getCollisionBoundingBoxFromPool(World par1World, int par2, int par3, int par4){
+	    return null;
 	}
-
+	
 	@Override
-	public AxisAlignedBB getCollisionBoundingBox(IBlockState state, IBlockAccess world, BlockPos pos){
-		return NULL_AABB;
-	}
-
-	@Override
-	public boolean hasTileEntity(IBlockState state){
+	public boolean hasTileEntity(int metadata){
 		return true;
 	}
-
+	
 	@Override
-	public void onEntityCollision(World world, BlockPos pos, IBlockState state, Entity entity){
-
-		if(entity instanceof EntityLivingBase){
-
-			if(world.getTileEntity(pos) instanceof TileEntityPlayerSave){
-
-				TileEntityPlayerSave tileentity = (TileEntityPlayerSave)world.getTileEntity(pos);
-
-				if(AllyDesignationSystem.isValidTarget(tileentity.getCaster(), entity)){
-
-					DamageSource source = tileentity.getCaster() == null ? DamageSource.CACTUS
-							: MagicDamage.causeDirectMagicDamage(tileentity.getCaster(), DamageType.MAGIC);
-
-					entity.attackEntityFrom(source, Spells.snare.getProperty(Spell.DAMAGE).floatValue());
-
-					((EntityLivingBase)entity).addPotionEffect(new PotionEffect(MobEffects.SLOWNESS,
-							Spells.snare.getProperty(Spell.EFFECT_DURATION).intValue(),
-							Spells.snare.getProperty(Spell.EFFECT_STRENGTH).intValue()));
-
-					if(!world.isRemote) world.destroyBlock(pos, false);
+	public void onEntityCollidedWithBlock(World world, int x, int y, int z, Entity entity){
+		if(!world.isRemote && entity instanceof EntityLivingBase){
+			if(world.getTileEntity(x, y, z) instanceof TileEntityPlayerSave){
+				TileEntityPlayerSave tileentity = (TileEntityPlayerSave)world.getTileEntity(x, y, z);
+				if(WizardryUtilities.isValidTarget(tileentity.getCaster(), entity)){
+					((EntityLivingBase)entity).attackEntityFrom(MagicDamage.causeDirectMagicDamage(tileentity.getCaster(), DamageType.MAGIC), 6);
+					((EntityLivingBase)entity).addPotionEffect(new PotionEffect(Potion.moveSlowdown.id, 100, 2));
+		        	world.func_147480_a(x, y, z, false);
 				}
 			}
 		}
 	}
-
-	// The similarly named onNeighborChange method does NOT do the same thing.
-	@SuppressWarnings("deprecation")
+	
 	@Override
-	public void neighborChanged(IBlockState state, World world, BlockPos pos, Block block, BlockPos fromPos){
-		super.neighborChanged(state, world, pos, block, fromPos);
-		if(!world.isSideSolid(pos.down(), EnumFacing.UP, false)){
-			world.setBlockToAir(pos);
-		}
+	public void onNeighborBlockChange(World world, int x, int y, int z, Block block)
+    {
+        super.onNeighborBlockChange(world, x, y, z, block);
+        if(!world.isSideSolid(x, y-1, z, ForgeDirection.UP)){
+        	world.setBlockToAir(x, y, z);
+        }
+    }
+	
+	@Override
+	public boolean renderAsNormalBlock()
+    {
+        return false;
+    }
+	
+    @Override
+	public boolean isOpaqueCube()
+    {
+        return false;
+    }
+	
+	@Override
+	public int getRenderType(){
+		return 23;
 	}
-
+	
 	@Override
-	public BlockRenderLayer getRenderLayer() {
-		return BlockRenderLayer.CUTOUT;
-	}
-
-	@Override
-	public EnumBlockRenderType getRenderType(IBlockState state){
-		return EnumBlockRenderType.MODEL;
-	}
-
-	@Override
-	public boolean isOpaqueCube(IBlockState state){
-		return false;
-	}
-
-	@Override
-	public boolean isFullCube(IBlockState state){
-		return false;
-	}
-
-	@Override
-	public Item getItemDropped(IBlockState state, Random rand, int fortune){
+	public Item getItemDropped(int a, Random random, int b){
 		return null;
 	}
 
 	@Override
-	public TileEntity createNewTileEntity(World world, int metadata){
+	public TileEntity createNewTileEntity(World world, int metadata) {
 		return new TileEntityPlayerSave();
 	}
 

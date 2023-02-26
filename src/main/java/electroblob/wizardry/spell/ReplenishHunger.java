@@ -1,41 +1,41 @@
 package electroblob.wizardry.spell;
 
-import electroblob.wizardry.util.SpellModifiers;
-import net.minecraft.entity.EntityLiving;
-import net.minecraft.entity.EntityLivingBase;
+import electroblob.wizardry.EnumElement;
+import electroblob.wizardry.EnumParticleType;
+import electroblob.wizardry.EnumSpellType;
+import electroblob.wizardry.EnumTier;
+import electroblob.wizardry.Wizardry;
+import electroblob.wizardry.WizardryUtilities;
 import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.util.EnumHand;
+import net.minecraft.item.EnumAction;
 import net.minecraft.world.World;
 
-public class ReplenishHunger extends SpellBuff {
+public class ReplenishHunger extends Spell {
 
-	public static final String HUNGER_POINTS = "hunger_points";
-	public static final String SATURATION_MODIFIER = "saturation_modifier";
-
-	public ReplenishHunger(){
-		super("replenish_hunger", 1, 0.7f, 0.3f);
-		this.soundValues(0.7f, 1.2f, 0.4f);
-		addProperties(HUNGER_POINTS, SATURATION_MODIFIER);
+	public ReplenishHunger() {
+		super(EnumTier.APPRENTICE, 30, EnumElement.HEALING, "replenish_hunger", EnumSpellType.UTILITY, 2000, EnumAction.bow, false);
 	}
-	
-	@Override public boolean canBeCastBy(EntityLiving npc, boolean override){ return false; }
-	
-	@Override
-	protected boolean applyEffects(EntityLivingBase caster, SpellModifiers modifiers){
-		return true; // In this case the best solution is to remove the functionality of this method and override cast.
-	}
-	
-	@Override
-	public boolean cast(World world, EntityPlayer caster, EnumHand hand, int ticksInUse, SpellModifiers modifiers){
 
-		if(caster.getFoodStats().needFood()){
-			int foodAmount = (int)(getProperty(HUNGER_POINTS).floatValue() * modifiers.get(SpellModifiers.POTENCY));
-			// Fixed issue #6: Changed to addStats, since setFoodLevel is client-side only
-			caster.getFoodStats().addStats(foodAmount, getProperty(SATURATION_MODIFIER).floatValue());
-			return super.cast(world, caster, hand, ticksInUse, modifiers);
-		}
+	@Override
+	public boolean cast(World world, EntityPlayer caster, int ticksInUse, float damageMultiplier, float rangeMultiplier, float durationMultiplier, float blastMultiplier) {
 		
+		if(caster.getFoodStats().needFood()){
+			int foodAmount = (int)(6*damageMultiplier);
+			// Fixed issue #6: Changed to addStats, since setFoodLevel is client-side only
+			caster.getFoodStats().addStats(foodAmount, foodAmount*0.1f);
+			if(world.isRemote){
+				for(int i=0; i<10; i++){
+					double x1 = (double)((float)caster.posX + world.rand.nextFloat()*2 - 1.0F);
+					double y1 = (double)((float)WizardryUtilities.getPlayerEyesPos(caster) - 0.5F + world.rand.nextFloat());
+					double z1 = (double)((float)caster.posZ + world.rand.nextFloat()*2 - 1.0F);
+					Wizardry.proxy.spawnParticle(EnumParticleType.SPARKLE, world, x1, y1, z1, 0, 0.1F, 0, 48 + world.rand.nextInt(12), 1.0f, 0.7f, 0.3f);
+				}
+			}
+			world.playSoundAtEntity(caster, "wizardry:heal", 0.7F, world.rand.nextFloat() * 0.4F + 1.0F);
+			return true;
+		}
 		return false;
 	}
+
 
 }

@@ -1,27 +1,68 @@
 package electroblob.wizardry.spell;
 
+import electroblob.wizardry.EnumElement;
+import electroblob.wizardry.EnumSpellType;
+import electroblob.wizardry.EnumTier;
 import electroblob.wizardry.entity.construct.EntityTornado;
-import electroblob.wizardry.item.SpellActions;
-import electroblob.wizardry.util.SpellModifiers;
+import electroblob.wizardry.entity.projectile.EntityMagicMissile;
+import net.minecraft.entity.EntityLiving;
 import net.minecraft.entity.EntityLivingBase;
-import net.minecraft.util.EnumFacing;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.item.EnumAction;
+import net.minecraft.world.World;
 
-public class Tornado extends SpellConstruct<EntityTornado> {
+public class Tornado extends Spell {
 
-	public static final String SPEED = "speed";
-	public static final String UPWARD_ACCELERATION = "upward_acceleration";
-
-	public Tornado(){
-		super("tornado", SpellActions.POINT, EntityTornado::new, false);
-		addProperties(EFFECT_RADIUS, SPEED, DAMAGE, UPWARD_ACCELERATION);
+	public Tornado() {
+		super(EnumTier.ADVANCED, 50, EnumElement.EARTH, "tornado", EnumSpellType.ATTACK, 200, EnumAction.none, false);
 	}
 
 	@Override
-	protected void addConstructExtras(EntityTornado construct, EnumFacing side, EntityLivingBase caster, SpellModifiers modifiers){
-		float speed = getProperty(SPEED).floatValue();
-		Vec3d direction = caster == null ? new Vec3d(side.getDirectionVec()) : caster.getLookVec();
-		construct.setHorizontalVelocity(direction.x * speed, direction.z * speed);
+	public boolean doesSpellRequirePacket(){
+		return false;
+	}
+
+	@Override
+	public boolean cast(World world, EntityPlayer caster, int ticksInUse, float damageMultiplier, float rangeMultiplier, float durationMultiplier, float blastMultiplier) {
+		
+		if(!world.isRemote){
+			double x = caster.posX + caster.getLookVec().xCoord;
+			double y = caster.posY;
+			double z = caster.posZ + caster.getLookVec().zCoord;
+			
+			EntityTornado tornado = new EntityTornado(world, x, y, z, caster, (int)(200*durationMultiplier), caster.getLookVec().xCoord/3, caster.getLookVec().zCoord/3, damageMultiplier);
+			world.spawnEntityInWorld(tornado);
+		}
+		caster.swingItem();
+		world.playSoundAtEntity(caster, "wizardry:ice", 1.0F, 1.0F);
+		return true;
+	}
+	
+	@Override
+	public boolean cast(World world, EntityLiving caster, EntityLivingBase target, float damageMultiplier, float rangeMultiplier, float durationMultiplier, float blastMultiplier){
+		
+		if(target != null){
+			
+			if(!world.isRemote){
+				double x = caster.posX + caster.getLookVec().xCoord;
+				double y = caster.posY;
+				double z = caster.posZ + caster.getLookVec().zCoord;
+				
+				EntityTornado tornado = new EntityTornado(world, x, y, z, caster, (int)(200*durationMultiplier), caster.getLookVec().xCoord/3, caster.getLookVec().zCoord/3, damageMultiplier);
+				world.spawnEntityInWorld(tornado);
+			}
+			caster.swingItem();
+			world.playSoundAtEntity(caster, "wizardry:ice", 1.0F, 1.0F);
+			
+			return true;
+		}
+		
+		return false;
+	}
+	
+	@Override
+	public boolean canBeCastByNPCs(){
+		return true;
 	}
 
 }

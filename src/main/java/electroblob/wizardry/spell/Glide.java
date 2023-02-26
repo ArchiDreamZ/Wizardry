@@ -1,77 +1,47 @@
 package electroblob.wizardry.spell;
 
+import electroblob.wizardry.EnumElement;
+import electroblob.wizardry.EnumParticleType;
+import electroblob.wizardry.EnumSpellType;
+import electroblob.wizardry.EnumTier;
 import electroblob.wizardry.Wizardry;
-import electroblob.wizardry.item.SpellActions;
-import electroblob.wizardry.registry.WizardrySounds;
-import electroblob.wizardry.util.ParticleBuilder;
-import electroblob.wizardry.util.ParticleBuilder.Type;
-import electroblob.wizardry.util.SpellModifiers;
-import net.minecraft.entity.EntityLivingBase;
+import electroblob.wizardry.WizardryUtilities;
 import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.init.SoundEvents;
-import net.minecraft.util.EnumHand;
+import net.minecraft.item.EnumAction;
 import net.minecraft.world.World;
 
 public class Glide extends Spell {
 
-	public static final String SPEED = "speed";
-	public static final String FALL_SPEED = "fall_speed";
-	public static final String ACCELERATION = "acceleration";
-
-	public Glide(){
-		super("glide", SpellActions.POINT_DOWN, true);
-		addProperties(SPEED, FALL_SPEED, ACCELERATION);
+	public Glide() {
+		super(EnumTier.ADVANCED, 5, EnumElement.EARTH, "glide", EnumSpellType.UTILITY, 0, EnumAction.none, true);
 	}
 
 	@Override
-	protected void playSound(World world, EntityLivingBase entity, int ticksInUse, int duration, SpellModifiers modifiers, String... sounds){
-		if(ticksInUse == 0 && world.isRemote) Wizardry.proxy.playSpellSoundLoop(entity, this, this.sounds[0], this.sounds[0], SoundEvents.UI_TOAST_OUT,
-				WizardrySounds.SPELLS, volume, pitch + pitchVariation * (world.rand.nextFloat() - 0.5f));
-	}
-
-	@Override
-	protected void playSound(World world, double x, double y, double z, int ticksInUse, int duration, SpellModifiers modifiers, String... sounds){
-		if(ticksInUse == 0 && world.isRemote){
-			Wizardry.proxy.playSpellSoundLoop(world, x, y, z, this, this.sounds[0], this.sounds[0], SoundEvents.UI_TOAST_OUT,
-					WizardrySounds.SPELLS, volume, pitch + pitchVariation * (world.rand.nextFloat() - 0.5f), duration);
-		}
-	}
-
-	@Override
-	public boolean cast(World world, EntityPlayer caster, EnumHand hand, int ticksInUse, SpellModifiers modifiers){
-
+	public boolean cast(World world, EntityPlayer caster, int ticksInUse, float damageMultiplier, float rangeMultiplier, float durationMultiplier, float blastMultiplier) {
+		
 		if(caster.motionY < -0.1 && !caster.isInWater()){
-
-			float speed = getProperty(SPEED).floatValue() * modifiers.get(SpellModifiers.POTENCY);
-			// There seems to be some sort of 'terminal velocity', presumably due to the slight slowing-down effect in
-			// vanilla - this means we have to apply potency modifiers to the acceleration as well as the speed or they
-			// appear to have no effect (a bug which had me confused for quite a while!) This also applies to flight.
-			float acceleration = getProperty(ACCELERATION).floatValue() * modifiers.get(SpellModifiers.POTENCY);
-
-			caster.motionY = -getProperty(FALL_SPEED).floatValue();
-			if(Math.abs(caster.motionX) < speed && Math.abs(caster.motionZ) < speed){
-				caster.addVelocity(caster.getLookVec().x * acceleration, 0, caster.getLookVec().z * acceleration);
+			caster.motionY = -0.1;
+			if(Math.abs(caster.motionX) < 0.4 && Math.abs(caster.motionZ) < 0.4){
+				caster.addVelocity(caster.getLookVec().xCoord/8, 0, caster.getLookVec().zCoord/8);
+				//entityplayer.moveEntity(entityplayer.motionX*10, 0, entityplayer.motionZ*10);
 			}
-
-			if(!Wizardry.settings.replaceVanillaFallDamage) caster.fallDistance = 0.0f;
-		}
-
-		if(world.isRemote){
-			double x = caster.posX - 0.25 + world.rand.nextDouble() / 2;
-			double y = caster.posY + world.rand.nextDouble();
-			double z = caster.posZ - 0.25 + world.rand.nextDouble() / 2;
-			ParticleBuilder.create(Type.SPARKLE).pos(x, y, z).vel(0, -0.1, 0).time(15).clr(1f, 1f, 1f).spawn(world);
-			x = caster.posX - 0.25 + world.rand.nextDouble() / 2;
-			y = caster.posY + world.rand.nextDouble();
-			z = caster.posZ - 0.25 + world.rand.nextDouble() / 2;
-			ParticleBuilder.create(Type.LEAF).pos(x, y, z).time(20).spawn(world);
-		}
-
-		if(ticksInUse % 24 == 0){
-			this.playSound(world, caster, ticksInUse, -1, modifiers);
+			caster.fallDistance = 0.0f;
 		}
 		
+		if(world.isRemote){
+			Wizardry.proxy.spawnParticle(EnumParticleType.SPARKLE, world, caster.posX - 0.25d + world.rand.nextDouble()/2, WizardryUtilities.getPlayerEyesPos(caster) - 1.5f + world.rand.nextDouble(), caster.posZ - 0.25d + world.rand.nextDouble()/2, 0, -0.1F, 0, 15, 1.0f, 1.0f, 1.0f);
+			Wizardry.proxy.spawnParticle(EnumParticleType.LEAF, world, caster.posX - 0.25d + world.rand.nextDouble()/2, WizardryUtilities.getPlayerEyesPos(caster) - 1.5f + world.rand.nextDouble(), caster.posZ - 0.25d + world.rand.nextDouble()/2, 0, -0.03, 0, 20);
+		}
+		
+		//if(caster.getItemInUseDuration() == 0){
+			//world.playSoundAtEntity(entityplayer, "wizardry:sparkle", 0.5F, 1.0f);
+		//}
+		
+		if(ticksInUse % 24 == 0){
+			world.playSoundAtEntity(caster, "mob.enderdragon.wings", 0.5F, 1.0f);
+		}
 		return true;
 	}
+
 
 }

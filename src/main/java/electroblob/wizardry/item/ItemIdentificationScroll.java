@@ -1,89 +1,82 @@
 package electroblob.wizardry.item;
 
-import electroblob.wizardry.Wizardry;
-import electroblob.wizardry.data.WizardData;
-import electroblob.wizardry.event.DiscoverSpellEvent;
-import electroblob.wizardry.registry.WizardrySounds;
-import electroblob.wizardry.registry.WizardryTabs;
-import electroblob.wizardry.spell.Spell;
-import electroblob.wizardry.util.InventoryUtils;
-import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.item.EnumRarity;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
-import net.minecraft.util.ActionResult;
-import net.minecraft.util.EnumActionResult;
-import net.minecraft.util.EnumHand;
-import net.minecraft.util.text.TextComponentTranslation;
-import net.minecraft.world.World;
-import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.fml.relauncher.Side;
-import net.minecraftforge.fml.relauncher.SideOnly;
-
-import javax.annotation.Nullable;
 import java.util.List;
 
+import electroblob.wizardry.EnumParticleType;
+import electroblob.wizardry.ExtendedPlayer;
+import electroblob.wizardry.Wizardry;
+import electroblob.wizardry.WizardryUtilities;
+import electroblob.wizardry.spell.Spell;
+import net.minecraft.enchantment.EnchantmentHelper;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.inventory.ContainerPlayer;
+import net.minecraft.inventory.Slot;
+import net.minecraft.item.Item;
+import net.minecraft.item.ItemBow;
+import net.minecraft.item.ItemStack;
+import net.minecraft.item.ItemSword;
+import net.minecraft.util.ChatComponentTranslation;
+import net.minecraft.util.StatCollector;
+import net.minecraft.world.World;
+
 public class ItemIdentificationScroll extends Item {
-
-	public ItemIdentificationScroll(){
+	
+	public ItemIdentificationScroll() {
 		super();
-		setCreativeTab(WizardryTabs.WIZARDRY);
+		this.setTextureName("wizardry:identification_scroll");
+		this.setUnlocalizedName("identification_scroll");
+		this.setCreativeTab(Wizardry.tabWizardry);
 	}
-
+	
 	@Override
-	@SideOnly(Side.CLIENT)
 	public boolean hasEffect(ItemStack stack){
 		return true;
 	}
-
+	
 	@Override
-	public EnumRarity getRarity(ItemStack stack){
-		return EnumRarity.UNCOMMON;
+	public void addInformation(ItemStack par1ItemStack, EntityPlayer par2EntityPlayer, List par3List, boolean par4){
+		par3List.add(StatCollector.translateToLocalFormatted("item.identification_scroll.desc1", "\u00A77"));
+		par3List.add(StatCollector.translateToLocalFormatted("item.identification_scroll.desc2", "\u00A77"));
 	}
-
+	
 	@Override
-	@SideOnly(Side.CLIENT)
-	public void addInformation(ItemStack stack, @Nullable World world, List<String> tooltip, net.minecraft.client.util.ITooltipFlag flag) {
-		Wizardry.proxy.addMultiLineDescription(tooltip, "item." + this.getRegistryName() + ".desc");
-	}
+	public ItemStack onItemRightClick(ItemStack stack, World world, EntityPlayer player){
+		
+		if(ExtendedPlayer.get(player) != null){
+			
+			ExtendedPlayer properties = ExtendedPlayer.get(player);
 
-	@Override
-	public ActionResult<ItemStack> onItemRightClick(World world, EntityPlayer player, EnumHand hand){
+			// Isolates just the hotbar
+			List hotbar = ((ContainerPlayer)player.openContainer).inventorySlots.subList(36, 45);
 
-		ItemStack stack = player.getHeldItem(hand);
+			for(Object slot : hotbar){
 
-		if(WizardData.get(player) != null){
+				if(slot instanceof Slot){
 
-			WizardData data = WizardData.get(player);
+					ItemStack stack1 = ((Slot)slot).getStack();
 
-			for(ItemStack stack1 : InventoryUtils.getPrioritisedHotbarAndOffhand(player)){
-
-				if(!stack1.isEmpty()){
-					Spell spell = Spell.byMetadata(stack1.getItemDamage());
-					if((stack1.getItem() instanceof ItemSpellBook || stack1.getItem() instanceof ItemScroll)
-							&& !data.hasSpellBeenDiscovered(spell)){
-
-						if(!MinecraftForge.EVENT_BUS.post(new DiscoverSpellEvent(player, spell,
-								DiscoverSpellEvent.Source.IDENTIFICATION_SCROLL))){
+					if(stack1 != null){
+						Spell spell = Spell.get(stack1.getItemDamage());
+						if((stack1.getItem() instanceof ItemSpellBook || stack1.getItem() instanceof ItemScroll)
+								&& !properties.hasSpellBeenDiscovered(spell)){
+							
 							// Identification scrolls give the chat readout in creative mode, otherwise it looks like
 							// nothing happens!
-							data.discoverSpell(spell);
-							player.playSound(WizardrySounds.MISC_DISCOVER_SPELL, 1.25f, 1);
-							if(!player.isCreative()) stack.shrink(1);
-							if(!world.isRemote) player.sendMessage(new TextComponentTranslation("spell.discover",
-									spell.getNameForTranslationFormatted()));
-
-							return new ActionResult<>(EnumActionResult.SUCCESS, stack);
+							properties.discoverSpell(spell);
+							player.triggerAchievement(Wizardry.identifySpell);
+							world.playSoundAtEntity(player, "random.levelup", 1.25f, 1);
+							if(!player.capabilities.isCreativeMode) stack.stackSize--;
+							if(!world.isRemote) player.addChatMessage(new ChatComponentTranslation("spell.discover", spell.getDisplayNameWithFormatting()));
+							
+							return stack;
 						}
 					}
 				}
 			}
 			// If it found nothing to identify, it says so!
-			if(!world.isRemote) player.sendMessage(
-					new TextComponentTranslation("item." + Wizardry.MODID + ":identification_scroll.nothing_to_identify"));
+			if(!world.isRemote) player.addChatMessage(new ChatComponentTranslation("item.identification_scroll.nothing_to_identify"));
 		}
-
-		return new ActionResult<>(EnumActionResult.FAIL, stack);
+		
+		return stack;
 	}
-
 }

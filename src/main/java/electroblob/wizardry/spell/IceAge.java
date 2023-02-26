@@ -1,129 +1,138 @@
 package electroblob.wizardry.spell;
 
-import electroblob.wizardry.block.BlockStatue;
-import electroblob.wizardry.item.SpellActions;
-import electroblob.wizardry.registry.WizardryBlocks;
-import electroblob.wizardry.registry.WizardryItems;
-import electroblob.wizardry.registry.WizardryPotions;
-import electroblob.wizardry.registry.WizardrySounds;
-import electroblob.wizardry.util.BlockUtils;
-import electroblob.wizardry.util.EntityUtils;
-import electroblob.wizardry.util.ParticleBuilder;
-import electroblob.wizardry.util.ParticleBuilder.Type;
-import electroblob.wizardry.util.SpellModifiers;
+import java.util.List;
+
+import electroblob.wizardry.EnumElement;
+import electroblob.wizardry.EnumSpellType;
+import electroblob.wizardry.EnumTier;
+import electroblob.wizardry.Wizardry;
+import electroblob.wizardry.WizardryUtilities;
+import electroblob.wizardry.tileentity.TileEntityStatue;
 import net.minecraft.entity.EntityLiving;
 import net.minecraft.entity.EntityLivingBase;
+import net.minecraft.entity.monster.EntityBlaze;
+import net.minecraft.entity.monster.EntityMagmaCube;
 import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.potion.PotionEffect;
-import net.minecraft.util.EnumFacing;
-import net.minecraft.util.EnumHand;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.init.Blocks;
+import net.minecraft.item.EnumAction;
 import net.minecraft.world.World;
 
-import javax.annotation.Nullable;
+public class IceAge extends Spell {
+	
+	private static final int baseDuration = 1200;
 
-public class IceAge extends SpellAreaEffect {
-
-	public static final String FREEZE_DURATION = "freeze_duration";
-
-	public IceAge(){
-		super("ice_age", SpellActions.POINT_DOWN, false);
-		this.soundValues(1.5f, 1.0f, 0);
-		this.alwaysSucceed(true);
-		addProperties(FREEZE_DURATION, EFFECT_DURATION, EFFECT_STRENGTH);
+	public IceAge() {
+		super(EnumTier.MASTER, 200, EnumElement.ICE, "ice_age", EnumSpellType.ATTACK, 1000, EnumAction.bow, false);
 	}
 
 	@Override
-	public boolean cast(World world, EntityPlayer caster, EnumHand hand, int ticksInUse, SpellModifiers modifiers){
-		freezeNearbyBlocks(world, caster.getPositionVector(), caster, modifiers);
-		return super.cast(world, caster, hand, ticksInUse, modifiers);
+	public boolean doesSpellRequirePacket(){
+		return false;
 	}
 
 	@Override
-	public boolean cast(World world, EntityLiving caster, EnumHand hand, int ticksInUse, EntityLivingBase target, SpellModifiers modifiers){
-		freezeNearbyBlocks(world, caster.getPositionVector(), caster, modifiers);
-		return super.cast(world, caster, hand, ticksInUse, target, modifiers);
-	}
+	public boolean cast(World world, EntityPlayer caster, int ticksInUse, float damageMultiplier, float rangeMultiplier, float durationMultiplier, float blastMultiplier) {
+		
+		List<EntityLivingBase> targets = WizardryUtilities.getEntitiesWithinRadius(7*blastMultiplier, caster.posX, caster.posY, caster.posZ, world);
+		
+		for(EntityLivingBase target : targets){
+			if(WizardryUtilities.isValidTarget(caster, target)){
+				if(!world.isRemote){
+					if(target instanceof EntityBlaze || target instanceof EntityMagmaCube){
+						// These have been removed for the time being because they cause the entity to sink into the floor when it breaks out.
+						//target.attackEntityFrom(WizardryUtilities.causePlayerMagicDamage(entityplayer), 8.0f * damageMultiplier);
+					}else{
+						//target.attackEntityFrom(WizardryUtilities.causePlayerMagicDamage(entityplayer), 4.0f * damageMultiplier);
+					}
+					if(target.isBurning()){
+						target.extinguish();
+					}
 
-	@Override
-	public boolean cast(World world, double x, double y, double z, EnumFacing direction, int ticksInUse, int duration, SpellModifiers modifiers){
-		freezeNearbyBlocks(world, new Vec3d(x, y, z), null, modifiers);
-		return super.cast(world, x, y, z, direction, ticksInUse, duration, modifiers);
-	}
-
-	@Override
-	protected boolean affectEntity(World world, Vec3d origin, @Nullable EntityLivingBase caster, EntityLivingBase target, int targetCount, int ticksInUse, SpellModifiers modifiers){
-
-		if(target instanceof EntityLiving){
-			if(((BlockStatue)WizardryBlocks.ice_statue).convertToStatue((EntityLiving)target,
-					caster, (int)(getProperty(FREEZE_DURATION).floatValue() * modifiers.get(WizardryItems.duration_upgrade)))){
-				target.playSound(WizardrySounds.MISC_FREEZE, 1.0F, world.rand.nextFloat() * 0.4F + 0.8F);
-			}
-		}else if(target instanceof EntityPlayer){
-			target.addPotionEffect(new PotionEffect(WizardryPotions.frost,
-					(int)(getProperty(EFFECT_DURATION).floatValue() * modifiers.get(WizardryItems.duration_upgrade)),
-					getProperty(EFFECT_STRENGTH).intValue()));
-		}
-
-		return true;
-	}
-
-	@Override
-	protected void spawnParticleEffect(World world, Vec3d origin, double radius, @Nullable EntityLivingBase caster, SpellModifiers modifiers){
-
-		for(int i=0; i<100; i++){
-			float r = world.rand.nextFloat();
-			double speed = 0.02/r * (1 + world.rand.nextDouble());//(world.rand.nextBoolean() ? 1 : -1) * (0.05 + 0.02 * world.rand.nextDouble());
-			ParticleBuilder.create(Type.SNOW)
-					.pos(origin.x, origin.y + world.rand.nextDouble() * 3, origin.z)
-					.vel(0, 0, 0)
-					.scale(2)
-					.spin(world.rand.nextDouble() * (radius - 0.5) + 0.5, speed)
-					.shaded(true)
-					.spawn(world);
-		}
-
-		for(int i=0; i<60; i++){
-			float r = world.rand.nextFloat();
-			double speed = 0.02/r * (1 + world.rand.nextDouble());//(world.rand.nextBoolean() ? 1 : -1) * (0.05 + 0.02 * world.rand.nextDouble());
-			ParticleBuilder.create(Type.CLOUD)
-					.pos(origin.x, origin.y + world.rand.nextDouble() * 2.5, origin.z)
-					.clr(0xffffff)
-					.spin(world.rand.nextDouble() * (radius - 1) + 0.5, speed)
-					.shaded(true)
-					.spawn(world);
-		}
-	}
-
-	private void freezeNearbyBlocks(World world, Vec3d origin, @Nullable EntityLivingBase caster, SpellModifiers modifiers){
-
-		if(!world.isRemote && EntityUtils.canDamageBlocks(caster, world)){
-
-			double radius = getProperty(EFFECT_RADIUS).floatValue() * modifiers.get(WizardryItems.blast_upgrade);
-
-			for(int i = -(int)radius; i <= (int)radius; i++){
-				for(int j = -(int)radius; j <= (int)radius; j++){
-
-					BlockPos pos = new BlockPos(origin).add(i, 0, j);
-
-					Integer y = BlockUtils.getNearestSurface(world, new BlockPos(pos), EnumFacing.UP, (int)radius, true, BlockUtils.SurfaceCriteria.SOLID_LIQUID_TO_AIR);
-
-					if(y != null){
-
-						pos = new BlockPos(pos.getX(), y, pos.getZ());
-
-						double dist = origin.distanceTo(new Vec3d(origin.x + i, y, origin.z + j));
-
-						// Randomised with weighting so that the nearer the block the more likely it is to be snowed.
-						if(y != -1 && world.rand.nextInt((int)(dist * 2) + 1) < radius && dist < radius
-								&& BlockUtils.canPlaceBlock(caster, world, pos)){
-							BlockUtils.freeze(world, pos.down(), true);
+					if(target instanceof EntityBlaze) caster.addStat(Wizardry.freezeBlaze, 1);
+					
+					if(target instanceof EntityLiving){
+						
+						// Stops the entity looking red while frozen and the resulting z-fighting
+						target.hurtTime = 0;
+						
+						int x = (int)Math.floor(target.posX);
+						int y = (int)Math.floor(target.posY);
+						int z = (int)Math.floor(target.posZ);
+						
+						//Short mobs such as spiders and pigs
+						if((target.height < 1.2 || target.isChild()) && WizardryUtilities.canBlockBeReplaced(world, x, y, z)){
+							world.setBlock(x, y, z, Wizardry.iceStatue);
+							if(world.getTileEntity(x, y, z) instanceof TileEntityStatue){
+								((TileEntityStatue)world.getTileEntity(x, y, z)).setCreatureAndPart((EntityLiving) target, 1, 1);
+								((TileEntityStatue)world.getTileEntity(x, y, z)).setLifetime((int)(baseDuration*durationMultiplier));
+							}
+							target.setDead();
+							world.playSoundAtEntity(target, "wizardry:freeze", 1.0F, world.rand.nextFloat() * 0.4F + 0.8F);
+						}
+						//Normal sized mobs like zombies and skeletons
+						else if(target.height < 2.5 && WizardryUtilities.canBlockBeReplaced(world, x, y, z) && WizardryUtilities.canBlockBeReplaced(world, x, y+1, z)){
+							world.setBlock(x, y, z, Wizardry.iceStatue);
+							if(world.getTileEntity(x, y, z) instanceof TileEntityStatue){
+								((TileEntityStatue)world.getTileEntity(x, y, z)).setCreatureAndPart((EntityLiving) target, 1, 2);
+								((TileEntityStatue)world.getTileEntity(x, y, z)).setLifetime((int)(baseDuration*durationMultiplier));
+							}
+							
+							world.setBlock(x, y+1, z, Wizardry.iceStatue);
+							if(world.getTileEntity(x, y+1, z) instanceof TileEntityStatue){
+								((TileEntityStatue)world.getTileEntity(x, y+1, z)).setCreatureAndPart((EntityLiving) target, 2, 2);
+							}
+							target.setDead();
+							world.playSoundAtEntity(target, "wizardry:freeze", 1.0F, world.rand.nextFloat() * 0.4F + 0.8F);
+						}
+						//Tall mobs like endermen
+						else if(WizardryUtilities.canBlockBeReplaced(world, x, y, z) && WizardryUtilities.canBlockBeReplaced(world, x, y+1, z) && WizardryUtilities.canBlockBeReplaced(world, x, y+2, z)){
+							world.setBlock(x, y, z, Wizardry.iceStatue);
+							if(world.getTileEntity(x, y, z) instanceof TileEntityStatue){
+								((TileEntityStatue)world.getTileEntity(x, y, z)).setCreatureAndPart((EntityLiving) target, 1, 3);
+								((TileEntityStatue)world.getTileEntity(x, y, z)).setLifetime((int)(baseDuration*durationMultiplier));
+							}
+							
+							world.setBlock(x, y+1, z, Wizardry.iceStatue);
+							if(world.getTileEntity(x, y+1, z) instanceof TileEntityStatue){
+								((TileEntityStatue)world.getTileEntity(x, y+1, z)).setCreatureAndPart((EntityLiving) target, 2, 3);
+							}
+							
+							world.setBlock(x, y+2, z, Wizardry.iceStatue);
+							if(world.getTileEntity(x, y+2, z) instanceof TileEntityStatue){
+								((TileEntityStatue)world.getTileEntity(x, y+2, z)).setCreatureAndPart((EntityLiving) target, 3, 3);
+							}
+							target.setDead();
+							world.playSoundAtEntity(target, "wizardry:freeze", 1.0F, world.rand.nextFloat() * 0.4F + 0.8F);
 						}
 					}
 				}
 			}
 		}
+		if(!world.isRemote){
+			for(int i=-7; i<8; i++){
+				for(int j=-7; j<8; j++){
+					int y = WizardryUtilities.getNearestFloorLevelB(world, (int)caster.posX + i, (int)caster.posY, (int)caster.posZ + j, 7);
+					//System.out.println(y);
+					double dist = caster.getDistance((int)caster.posX + i, y, (int)caster.posZ + j);
+					// Randomised with weighting so that the nearer the block the more likely it is to be snowed.
+					if(y != -1 && world.rand.nextInt((int)dist*2 + 1) < 7 && dist < 8){
+						if(world.getBlock((int)caster.posX + i, y-1, (int)caster.posZ + j) == Blocks.water){
+							world.setBlock((int)caster.posX + i, y-1, (int)caster.posZ + j, Blocks.ice);
+						}else if(world.getBlock((int)caster.posX + i, y-1, (int)caster.posZ + j) == Blocks.lava){
+							world.setBlock((int)caster.posX + i, y-1, (int)caster.posZ + j, Blocks.obsidian);
+						}else if(world.getBlock((int)caster.posX + i, y-1, (int)caster.posZ + j) == Blocks.flowing_lava){
+							world.setBlock((int)caster.posX + i, y-1, (int)caster.posZ + j, Blocks.cobblestone);
+						}else{
+							world.setBlock((int)caster.posX + i, y, (int)caster.posZ + j, Blocks.snow_layer);
+						}
+					}
+				}
+			}
+		}
+		world.playSoundAtEntity(caster, "wizardry:ice", 0.7F, 1.0f);
+		world.playSoundAtEntity(caster, "wizardry:wind", 1.0F, 1.0f);
+		return true;
 	}
+
 
 }

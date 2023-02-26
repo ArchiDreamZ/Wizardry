@@ -1,41 +1,86 @@
 package electroblob.wizardry.spell;
 
-import electroblob.wizardry.item.SpellActions;
-import electroblob.wizardry.util.ParticleBuilder;
-import electroblob.wizardry.util.SpellModifiers;
+import java.util.List;
+
+import electroblob.wizardry.EnumElement;
+import electroblob.wizardry.EnumParticleType;
+import electroblob.wizardry.EnumSpellType;
+import electroblob.wizardry.EnumTier;
+import electroblob.wizardry.Wizardry;
+import electroblob.wizardry.WizardryUtilities;
+import electroblob.wizardry.entity.living.EntitySummonedCreature;
 import net.minecraft.entity.EntityLivingBase;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.item.EnumAction;
+import net.minecraft.potion.Potion;
+import net.minecraft.potion.PotionEffect;
 import net.minecraft.world.World;
 
-import javax.annotation.Nullable;
+public class GroupHeal extends Spell {
 
-public class GroupHeal extends SpellAreaEffect {
-
-	public GroupHeal(){
-		super("group_heal", SpellActions.POINT_UP, false);
-		this.soundValues(0.7f, 1.2f, 0.4f);
-		this.targetAllies(true);
-		addProperties(HEALTH);
+	public GroupHeal() {
+		super(EnumTier.ADVANCED, 100, EnumElement.HEALING, "group_heal", EnumSpellType.DEFENCE, 1000, EnumAction.bow, false);
 	}
 
 	@Override
-	protected boolean affectEntity(World world, Vec3d origin, @Nullable EntityLivingBase caster, EntityLivingBase target, int targetCount, int ticksInUse, SpellModifiers modifiers){
+	public boolean cast(World world, EntityPlayer caster, int ticksInUse, float damageMultiplier, float rangeMultiplier, float durationMultiplier, float blastMultiplier) {
 
-		if(target.getHealth() < target.getMaxHealth() && target.getHealth() > 0){
+		boolean flag = false;
 
-			Heal.heal(target, getProperty(HEALTH).floatValue() * modifiers.get(SpellModifiers.POTENCY));
+		List<EntityLivingBase> targets = WizardryUtilities.getEntitiesWithinRadius(5*blastMultiplier, caster.posX, caster.posY, caster.posZ, world);
 
-			if(world.isRemote) ParticleBuilder.spawnHealParticles(world, target);
-			playSound(world, target, ticksInUse, -1, modifiers);
-			return true;
+		for(EntityLivingBase target : targets){
+
+			if(target instanceof EntityPlayer){
+
+				if(WizardryUtilities.isPlayerAlly(caster, (EntityPlayer)target) || target == caster){
+
+					if(((EntityPlayer)target).shouldHeal()){
+
+						target.heal((int)(6*damageMultiplier));
+
+						if(world.isRemote){
+							for(int i=0; i<10; i++){
+								double d0 = (double)((float)target.posX + world.rand.nextFloat()*2 - 1.0F);
+								double d1 = (double)((float)WizardryUtilities.getPlayerEyesPos((EntityPlayer)target) - 0.5F + world.rand.nextFloat());
+								double d2 = (double)((float)target.posZ + world.rand.nextFloat()*2 - 1.0F);
+								Wizardry.proxy.spawnParticle(EnumParticleType.SPARKLE, world, d0, d1, d2, 0, 0.1F, 0, 48 + world.rand.nextInt(12), 1.0f, 1.0f, 0.3f);
+							}
+						}
+
+						world.playSoundAtEntity(caster, "wizardry:heal", 0.7F, world.rand.nextFloat() * 0.4F + 1.0F);
+						flag = true;
+					}
+				}
+			// Now also works on summoned creatures
+			}else if(target instanceof EntitySummonedCreature){
+
+				EntityLivingBase summoner = ((EntitySummonedCreature)target).getCaster();
+
+				if(summoner == caster || (summoner instanceof EntityPlayer && WizardryUtilities.isPlayerAlly(caster, (EntityPlayer)summoner))){
+
+					if(target.getHealth() < target.getMaxHealth()){
+						
+						target.heal((int)(6*damageMultiplier));
+
+						if(world.isRemote){
+							for(int i=0; i<10; i++){
+								double d0 = (double)((float)target.posX + world.rand.nextFloat()*2 - 1.0F);
+								double d1 = (double)((float)WizardryUtilities.getPlayerEyesPos((EntityPlayer)target) - 0.5F + world.rand.nextFloat());
+								double d2 = (double)((float)target.posZ + world.rand.nextFloat()*2 - 1.0F);
+								Wizardry.proxy.spawnParticle(EnumParticleType.SPARKLE, world, d0, d1, d2, 0, 0.1F, 0, 48 + world.rand.nextInt(12), 1.0f, 1.0f, 0.3f);
+							}
+						}
+
+						world.playSoundAtEntity(caster, "wizardry:heal", 0.7F, world.rand.nextFloat() * 0.4F + 1.0F);
+						flag = true;
+					}
+				}
+			}
 		}
 
-		return false; // Only succeeds if something was healed
+		return flag;
 	}
 
-	@Override
-	protected void spawnParticleEffect(World world, Vec3d origin, double radius, @Nullable EntityLivingBase caster, SpellModifiers modifiers){
-		// We're spawning particles above so don't bother with this method
-	}
 
 }

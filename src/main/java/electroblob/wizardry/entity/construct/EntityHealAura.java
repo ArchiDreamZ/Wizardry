@@ -1,39 +1,42 @@
 package electroblob.wizardry.entity.construct;
 
-import electroblob.wizardry.registry.Spells;
-import electroblob.wizardry.registry.WizardrySounds;
-import electroblob.wizardry.spell.Spell;
-import electroblob.wizardry.util.EntityUtils;
-import electroblob.wizardry.util.MagicDamage;
-import electroblob.wizardry.util.MagicDamage.DamageType;
-import electroblob.wizardry.util.ParticleBuilder;
-import electroblob.wizardry.util.ParticleBuilder.Type;
-import net.minecraft.entity.EntityLivingBase;
-import net.minecraft.util.DamageSource;
-import net.minecraft.util.math.MathHelper;
-import net.minecraft.world.World;
-
 import java.util.List;
 
-public class EntityHealAura extends EntityScaledConstruct {
+import electroblob.wizardry.EnumElement;
+import electroblob.wizardry.EnumParticleType;
+import electroblob.wizardry.MagicDamage;
+import electroblob.wizardry.Wizardry;
+import electroblob.wizardry.WizardryUtilities;
+import electroblob.wizardry.MagicDamage.DamageType;
+import net.minecraft.entity.EntityLivingBase;
+import net.minecraft.util.DamageSource;
+import net.minecraft.world.World;
 
-	public EntityHealAura(World world){
+public class EntityHealAura extends EntityMagicConstruct {
+
+	public EntityHealAura(World world) {
 		super(world);
-		setSize(Spells.healing_aura.getProperty(Spell.EFFECT_RADIUS).floatValue() * 2, 1);
+		this.height = 1.0f;
+		this.width = 5.0f;
 	}
 
-	@Override
+	public EntityHealAura(World world, double x, double y, double z, EntityLivingBase caster, int lifetime, float damageMultiplier) {
+		super(world, x, y, z, caster, lifetime, damageMultiplier);
+		this.height = 1.0f;
+		this.width = 5.0f;
+	}
+
 	public void onUpdate(){
 
 		if(this.ticksExisted % 25 == 1){
-			this.playSound(WizardrySounds.ENTITY_HEAL_AURA_AMBIENT, 0.1f, 1.0f);
+			this.playSound("wizardry:sparkle", 0.1f, 1.0f);
 		}
 
 		super.onUpdate();
 
-		if(!this.world.isRemote){
+		if(!this.worldObj.isRemote){
 
-			List<EntityLivingBase> targets = EntityUtils.getLivingWithinRadius(width/2, posX, posY, posZ, world);
+			List<EntityLivingBase> targets = WizardryUtilities.getEntitiesWithinRadius(2.5d, this.posX, this.posY, this.posZ, this.worldObj);
 
 			for(EntityLivingBase target : targets){
 
@@ -46,11 +49,9 @@ public class EntityHealAura extends EntityScaledConstruct {
 						double velZ = target.motionZ;
 
 						if(this.getCaster() != null){
-							target.attackEntityFrom(
-									MagicDamage.causeIndirectMagicDamage(this, getCaster(), DamageType.RADIANT),
-									Spells.healing_aura.getProperty(Spell.DAMAGE).floatValue() * damageMultiplier);
+							target.attackEntityFrom(MagicDamage.causeIndirectEntityMagicDamage(this, getCaster(), DamageType.RADIANT), 1*damageMultiplier);
 						}else{
-							target.attackEntityFrom(DamageSource.MAGIC, Spells.healing_aura.getProperty(Spell.DAMAGE).floatValue() * damageMultiplier);
+							target.attackEntityFrom(DamageSource.magic, 1*damageMultiplier);
 						}
 
 						// Removes knockback
@@ -59,27 +60,25 @@ public class EntityHealAura extends EntityScaledConstruct {
 						target.motionZ = velZ;
 					}
 
-				}else if(target.getHealth() < target.getMaxHealth() && target.ticksExisted % 5 == 0){
-					target.heal(Spells.healing_aura.getProperty(Spell.HEALTH).floatValue() * damageMultiplier);
+				}else if(target.getHealth() < target.getMaxHealth() && this.ticksExisted % 5 == 0){
+					target.heal(1*damageMultiplier);
 				}
 			}
 		}else{
 			for(int i=1; i<3; i++){
-				float brightness = 0.5f + (rand.nextFloat() * 0.5f);
-				double radius = rand.nextDouble() * (width/2);
-				float angle = rand.nextFloat() * (float)Math.PI * 2;
-				ParticleBuilder.create(Type.SPARKLE)
-				.pos(this.posX + radius * MathHelper.cos(angle), this.posY, this.posZ + radius * MathHelper.sin(angle))
-				.vel(0, 0.05, 0)
-				.time(48 + this.rand.nextInt(12))
-				.clr(1.0f, 1.0f, brightness)
-				.spawn(world);
+				float brightness = 0.5f + (rand.nextFloat()*0.5f);
+				double radius = rand.nextDouble()*2.0;
+				double angle = rand.nextDouble()*Math.PI*2;
+				Wizardry.proxy.spawnParticle(EnumParticleType.SPARKLE, worldObj, this.posX + radius*Math.cos(angle), this.posY, this.posZ + radius*Math.sin(angle), 0, 0.05f, 0, 48 + this.rand.nextInt(12), 1.0f, 1.0f, brightness);
 			}
 		}
 	}
 
-	@Override
-	public boolean canRenderOnFire(){
+	/**
+	 * Return whether this entity should be rendered as on fire.
+	 */
+	public boolean canRenderOnFire()
+	{
 		return false;
 	}
 

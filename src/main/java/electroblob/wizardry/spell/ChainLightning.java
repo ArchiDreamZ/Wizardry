@@ -1,119 +1,139 @@
 package electroblob.wizardry.spell;
 
-import electroblob.wizardry.item.SpellActions;
-import electroblob.wizardry.util.*;
-import electroblob.wizardry.util.MagicDamage.DamageType;
-import electroblob.wizardry.util.ParticleBuilder.Type;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.EntityLivingBase;
-import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.util.EnumFacing;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.util.text.TextComponentTranslation;
-import net.minecraft.world.World;
-
 import java.util.List;
 
-public class ChainLightning extends SpellRay {
+import electroblob.wizardry.EnumElement;
+import electroblob.wizardry.EnumParticleType;
+import electroblob.wizardry.EnumSpellType;
+import electroblob.wizardry.EnumTier;
+import electroblob.wizardry.MagicDamage;
+import electroblob.wizardry.Wizardry;
+import electroblob.wizardry.WizardryUtilities;
+import electroblob.wizardry.MagicDamage.DamageType;
+import electroblob.wizardry.entity.EntityArc;
+import electroblob.wizardry.entity.living.EntityLightningWraith;
+import electroblob.wizardry.entity.living.EntityStormElemental;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.EntityLivingBase;
+import net.minecraft.entity.monster.EntityCreeper;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.item.EnumAction;
+import net.minecraft.util.ChatComponentTranslation;
+import net.minecraft.util.MovingObjectPosition;
+import net.minecraft.world.World;
 
-	public static final String PRIMARY_DAMAGE = "primary_damage";
-	public static final String SECONDARY_DAMAGE = "secondary_damage";
-	public static final String TERTIARY_DAMAGE = "tertiary_damage";
+public class ChainLightning extends Spell {
 
-	public static final String SECONDARY_RANGE = "secondary_range";
-	public static final String TERTIARY_RANGE = "tertiary_range";
-
-	public static final String SECONDARY_MAX_TARGETS = "secondary_max_targets";
-	public static final String TERTIARY_MAX_TARGETS = "tertiary_max_targets"; // This is per secondary target
-
-	public ChainLightning(){
-		super("chain_lightning", SpellActions.POINT, false);
-		this.aimAssist(0.6f);
-		this.soundValues(1, 1.7f, 0.2f);
-		addProperties(PRIMARY_DAMAGE, SECONDARY_DAMAGE, TERTIARY_DAMAGE, SECONDARY_RANGE, TERTIARY_RANGE,
-				SECONDARY_MAX_TARGETS, TERTIARY_MAX_TARGETS);
+	public ChainLightning() {
+		super(EnumTier.ADVANCED, 25, EnumElement.LIGHTNING, "chain_lightning", EnumSpellType.ATTACK, 50, EnumAction.none, false);
 	}
 
 	@Override
-	protected boolean onEntityHit(World world, Entity target, Vec3d hit, EntityLivingBase caster, Vec3d origin, int ticksInUse, SpellModifiers modifiers){
+	public boolean cast(World world, EntityPlayer caster, int ticksInUse, float damageMultiplier, float rangeMultiplier, float durationMultiplier, float blastMultiplier) {
+		
+		// First shot has range 10 (this is the only range affected by upgrades) and does 5 hearts of damage.
+		// Chains to up to 5 secondary targets within a range of 5 of the primary target, and then to up to 2
+		// tertiary targets per secondary target within a range of 5 of that. Secondary targets are dealt 4 hearts
+		// of damage; tertiary targets are dealt 3 hearts of damage.
 
+		MovingObjectPosition rayTrace = WizardryUtilities.standardEntityRayTrace(world, caster, 10*rangeMultiplier, 8.0f);
+		
 		// Anything can be attacked with the initial arc, because the player has control over where it goes. If they
 		// hit a minion or an ally, it's their problem!
-		if(EntityUtils.isLiving(target)){
-
-			electrocute(world, caster, origin, target, getProperty(PRIMARY_DAMAGE).floatValue()
-					* modifiers.get(SpellModifiers.POTENCY));
-
+		if(rayTrace != null && rayTrace.entityHit != null && rayTrace.entityHit instanceof EntityLivingBase){
+			
+			Entity target = rayTrace.entityHit;
+			
+			if(!world.isRemote){
+				EntityArc arc = new EntityArc(world);
+				arc.setEndpointCoords(caster.posX, caster.posY + caster.height/2, caster.posZ,
+						target.posX, target.posY + target.height/2, target.posZ);
+				world.spawnEntityInWorld(arc);
+			}else{
+				for(int i=0;i<8;i++){
+					Wizardry.proxy.spawnParticle(EnumParticleType.SPARK, world, target.posX + world.rand.nextFloat() - 0.5, WizardryUtilities.getEntityFeetPos(target) + target.height/2 + world.rand.nextFloat()*2 - 1, target.posZ + world.rand.nextFloat() - 0.5, 0, 0, 0, 3);
+					world.spawnParticle("largesmoke", target.posX + world.rand.nextFloat() - 0.5, WizardryUtilities.getEntityFeetPos(target) + target.height/2 + world.rand.nextFloat()*2 - 1, target.posZ + world.rand.nextFloat() - 0.5, 0, 0, 0);
+				}
+			}
+			
+			world.playSoundAtEntity(target, "wizardry:arc", 1.0F, world.rand.nextFloat() * 0.4F + 1.5F);
+			
+			if(MagicDamage.isEntityImmune(DamageType.SHOCK, target)){
+				if(!world.isRemote) caster.addChatComponentMessage(new ChatComponentTranslation("spell.resist", target.getCommandSenderName(), this.getDisplayNameWithFormatting()));
+			}else{
+				target.attackEntityFrom(MagicDamage.causeDirectMagicDamage(caster, DamageType.SHOCK), 10.0f * damageMultiplier);
+			}
+			
 			// Secondary chaining effect
-			List<EntityLivingBase> secondaryTargets = EntityUtils.getLivingWithinRadius(
-					getProperty(SECONDARY_RANGE).doubleValue(), target.posX, target.posY + target.height / 2, target.posZ, world);
+			double seekerRange = 5.0d;
 
-			secondaryTargets.remove(target);
-			secondaryTargets.removeIf(e -> !EntityUtils.isLiving(e));
-			secondaryTargets.removeIf(e -> !AllyDesignationSystem.isValidTarget(caster, e));
-			if(secondaryTargets.size() > getProperty(SECONDARY_MAX_TARGETS).intValue())
-				secondaryTargets = secondaryTargets.subList(0, getProperty(SECONDARY_MAX_TARGETS).intValue());
+			List<EntityLivingBase> secondaryTargets = WizardryUtilities.getEntitiesWithinRadius(seekerRange, target.posX, target.posY + target.height/2, target.posZ, world);
 
-			for(EntityLivingBase secondaryTarget : secondaryTargets){
+			for(int i=0; i<Math.min(secondaryTargets.size(), 5); i++){
+				
+				EntityLivingBase secondaryTarget = secondaryTargets.get(i);
+				
+				if(secondaryTarget != target && WizardryUtilities.isValidTarget(caster, secondaryTarget)){
+					
+					if(!world.isRemote){
+						EntityArc arc = new EntityArc(world);
+						arc.setEndpointCoords(target.posX, target.posY + target.height/2, target.posZ,
+								secondaryTarget.posX, secondaryTarget.posY + secondaryTarget.height/2, secondaryTarget.posZ);
+						world.spawnEntityInWorld(arc);
+					}else{
+						for(int j=0;j<8;j++){
+							Wizardry.proxy.spawnParticle(EnumParticleType.SPARK, world, secondaryTarget.posX + world.rand.nextFloat() - 0.5, WizardryUtilities.getEntityFeetPos(secondaryTarget) + secondaryTarget.height/2 + world.rand.nextFloat()*2 - 1, secondaryTarget.posZ + world.rand.nextFloat() - 0.5, 0, 0, 0, 3);
+							world.spawnParticle("largesmoke", secondaryTarget.posX + world.rand.nextFloat() - 0.5, WizardryUtilities.getEntityFeetPos(secondaryTarget) + secondaryTarget.height/2 + world.rand.nextFloat()*2 - 1, secondaryTarget.posZ + world.rand.nextFloat() - 0.5, 0, 0, 0);
+						}
+					}
+					
+					world.playSoundAtEntity(secondaryTarget, "wizardry:arc", 1.0F, world.rand.nextFloat() * 0.4F + 1.5F);
+					
+					if(MagicDamage.isEntityImmune(DamageType.SHOCK, secondaryTarget)){
+						if(!world.isRemote) caster.addChatComponentMessage(new ChatComponentTranslation("spell.resist", secondaryTarget.getCommandSenderName(), this.getDisplayNameWithFormatting()));
+					}else{
+						secondaryTarget.attackEntityFrom(MagicDamage.causeDirectMagicDamage(caster, DamageType.SHOCK), 4.0f * damageMultiplier);
+					}
+					
+					// Tertiary chaining effect
 
-				electrocute(world, caster, target.getPositionVector().add(0, target.height/2, 0), secondaryTarget,
-						getProperty(SECONDARY_DAMAGE).floatValue() * modifiers.get(SpellModifiers.POTENCY));
+					List<EntityLivingBase> tertiaryTargets = WizardryUtilities.getEntitiesWithinRadius(seekerRange, secondaryTarget.posX, secondaryTarget.posY + secondaryTarget.height/2, secondaryTarget.posZ, world);
 
-				// Tertiary chaining effect
+					for(int j=0;j<Math.min(tertiaryTargets.size(), 2);j++){
+						
+						EntityLivingBase tertiaryTarget = (EntityLivingBase)tertiaryTargets.get(j);
 
-				List<EntityLivingBase> tertiaryTargets = EntityUtils.getLivingWithinRadius(
-						getProperty(TERTIARY_RANGE).doubleValue(), secondaryTarget.posX,
-						secondaryTarget.posY + secondaryTarget.height / 2, secondaryTarget.posZ, world);
+						if(tertiaryTarget != target && !secondaryTargets.contains(tertiaryTarget) && WizardryUtilities.isValidTarget(caster, tertiaryTarget)){
 
-				tertiaryTargets.remove(target);
-				tertiaryTargets.removeAll(secondaryTargets);
-				tertiaryTargets.removeIf(e -> !EntityUtils.isLiving(e));
-				tertiaryTargets.removeIf(e -> !AllyDesignationSystem.isValidTarget(caster, e));
-				if(tertiaryTargets.size() > getProperty(TERTIARY_MAX_TARGETS).intValue())
-					tertiaryTargets = tertiaryTargets.subList(0, getProperty(TERTIARY_MAX_TARGETS).intValue());
-
-				for(EntityLivingBase tertiaryTarget : tertiaryTargets){
-					electrocute(world, caster, secondaryTarget.getPositionVector().add(0, secondaryTarget.height/2, 0),
-							tertiaryTarget, getProperty(TERTIARY_DAMAGE).floatValue() * modifiers.get(SpellModifiers.POTENCY));
+							if(!world.isRemote){
+								EntityArc arc = new EntityArc(world);
+								arc.setEndpointCoords(secondaryTarget.posX, secondaryTarget.posY + secondaryTarget.height/2, secondaryTarget.posZ,
+										tertiaryTarget.posX, tertiaryTarget.posY + tertiaryTarget.height/2, tertiaryTarget.posZ);
+								world.spawnEntityInWorld(arc);
+							}else{
+								for(int k=0;k<8;k++){
+									Wizardry.proxy.spawnParticle(EnumParticleType.SPARK, world, tertiaryTarget.posX + world.rand.nextFloat() - 0.5, WizardryUtilities.getEntityFeetPos(tertiaryTarget) + tertiaryTarget.height/2 + world.rand.nextFloat()*2 - 1, tertiaryTarget.posZ + world.rand.nextFloat() - 0.5, 0, 0, 0, 3);
+									world.spawnParticle("largesmoke", tertiaryTarget.posX + world.rand.nextFloat() - 0.5, WizardryUtilities.getEntityFeetPos(tertiaryTarget) + tertiaryTarget.height/2 + world.rand.nextFloat()*2 - 1, tertiaryTarget.posZ + world.rand.nextFloat() - 0.5, 0, 0, 0);
+								}
+							}
+							
+							world.playSoundAtEntity(tertiaryTarget, "wizardry:arc", 1.0F, world.rand.nextFloat() * 0.4F + 1.5F);
+							
+							if(MagicDamage.isEntityImmune(DamageType.SHOCK, tertiaryTarget)){
+								if(!world.isRemote) caster.addChatComponentMessage(new ChatComponentTranslation("spell.resist", tertiaryTarget.getCommandSenderName(), this.getDisplayNameWithFormatting()));
+							}else{
+								tertiaryTarget.attackEntityFrom(MagicDamage.causeDirectMagicDamage(caster, DamageType.SHOCK), 6.0f * damageMultiplier);
+							}
+						}
+					}
 				}
 			}
 
+			caster.swingItem();
 			return true;
 		}
-
 		return false;
 	}
 
-	@Override
-	protected boolean onBlockHit(World world, BlockPos pos, EnumFacing side, Vec3d hit, EntityLivingBase caster, Vec3d origin, int ticksInUse, SpellModifiers modifiers){
-		return false;
-	}
-
-	@Override
-	protected boolean onMiss(World world, EntityLivingBase caster, Vec3d origin, Vec3d direction, int ticksInUse, SpellModifiers modifiers){
-		return false;
-	}
-
-	private void electrocute(World world, Entity caster, Vec3d origin, Entity target, float damage){
-
-		if(MagicDamage.isEntityImmune(DamageType.SHOCK, target)){
-			if(!world.isRemote && caster instanceof EntityPlayer) ((EntityPlayer)caster).sendStatusMessage(
-					new TextComponentTranslation("spell.resist", target.getName(), this.getNameForTranslationFormatted()),
-					true);
-		}else{
-			target.attackEntityFrom(MagicDamage.causeDirectMagicDamage(caster, DamageType.SHOCK), damage);
-		}
-
-		if(world.isRemote){
-			
-			ParticleBuilder.create(Type.LIGHTNING).entity(caster)
-			.pos(caster != null ? origin.subtract(caster.getPositionVector()) : origin).target(target).spawn(world);
-			
-			ParticleBuilder.spawnShockParticles(world, target.posX, target.posY + target.height/2, target.posZ);
-		}
-
-		//target.playSound(WizardrySounds.SPELL_SPARK, 1, 1.5f + 0.4f * world.rand.nextFloat());
-	}
 
 }

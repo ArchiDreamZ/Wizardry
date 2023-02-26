@@ -1,113 +1,133 @@
 package electroblob.wizardry.spell;
 
-import electroblob.wizardry.client.DrawingUtils;
-import electroblob.wizardry.item.SpellActions;
-import electroblob.wizardry.registry.WizardryItems;
-import electroblob.wizardry.util.BlockUtils;
-import electroblob.wizardry.util.BlockUtils.SurfaceCriteria;
-import electroblob.wizardry.util.EntityUtils;
-import electroblob.wizardry.util.ParticleBuilder;
-import electroblob.wizardry.util.ParticleBuilder.Type;
-import electroblob.wizardry.util.SpellModifiers;
-import net.minecraft.entity.EntityLiving;
+import electroblob.wizardry.EnumElement;
+import electroblob.wizardry.EnumParticleType;
+import electroblob.wizardry.EnumSpellType;
+import electroblob.wizardry.EnumTier;
+import electroblob.wizardry.MagicDamage;
+import electroblob.wizardry.Wizardry;
+import electroblob.wizardry.WizardryUtilities;
+import electroblob.wizardry.MagicDamage.DamageType;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.init.Blocks;
-import net.minecraft.util.EnumFacing;
-import net.minecraft.util.EnumHand;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.item.EnumAction;
+import net.minecraft.util.ChatComponentTranslation;
+import net.minecraft.util.MovingObjectPosition;
+import net.minecraft.util.MovingObjectPosition.MovingObjectType;
+import net.minecraft.util.Vec3;
 import net.minecraft.world.World;
 
-import javax.annotation.Nullable;
+public class Firestorm extends Spell {
 
-public class Firestorm extends SpellAreaEffect {
-
-	public Firestorm(){
-		super("firestorm", SpellActions.POINT_DOWN, false);
-		this.soundValues(2f, 1.0f, 0);
-		this.alwaysSucceed(true);
-		addProperties(BURN_DURATION);
+	public Firestorm() {
+		super(EnumTier.MASTER, 15, EnumElement.FIRE, "firestorm", EnumSpellType.ATTACK, 0, EnumAction.none, true);
 	}
 
 	@Override
-	public boolean cast(World world, EntityPlayer caster, EnumHand hand, int ticksInUse, SpellModifiers modifiers){
-		burnNearbyBlocks(world, caster.getPositionVector(), caster, modifiers);
-		return super.cast(world, caster, hand, ticksInUse, modifiers);
-	}
-
-	@Override
-	public boolean cast(World world, EntityLiving caster, EnumHand hand, int ticksInUse, EntityLivingBase target, SpellModifiers modifiers){
-		burnNearbyBlocks(world, caster.getPositionVector(), caster, modifiers);
-		return super.cast(world, caster, hand, ticksInUse, target, modifiers);
-	}
-
-	@Override
-	public boolean cast(World world, double x, double y, double z, EnumFacing direction, int ticksInUse, int duration, SpellModifiers modifiers){
-		burnNearbyBlocks(world, new Vec3d(x, y, z), null, modifiers);
-		return super.cast(world, x, y, z, direction, ticksInUse, duration, modifiers);
-	}
-
-	@Override
-	protected boolean affectEntity(World world, Vec3d origin, @Nullable EntityLivingBase caster, EntityLivingBase target, int targetCount, int ticksInUse, SpellModifiers modifiers){
-		target.setFire(getProperty(BURN_DURATION).intValue());
+	public boolean cast(World world, EntityPlayer caster, int ticksInUse, float damageMultiplier, float rangeMultiplier, float durationMultiplier, float blastMultiplier) {
+		
+		Vec3 look = caster.getLookVec();
+		
+		MovingObjectPosition rayTrace = WizardryUtilities.standardEntityRayTrace(world, caster, 10*rangeMultiplier);
+		
+		if(rayTrace != null && rayTrace.typeOfHit == MovingObjectType.ENTITY && rayTrace.entityHit instanceof EntityLivingBase){
+			
+			EntityLivingBase target = (EntityLivingBase) rayTrace.entityHit;
+			
+			if(!MagicDamage.isEntityImmune(DamageType.FIRE, target)){
+				
+				target.setFire(10);
+				
+				// This motion stuff removes knockback, which is desirable for continuous spells.
+				double motionX = target.motionX;
+				double motionY = target.motionY;
+				double motionZ = target.motionZ;
+				
+				target.attackEntityFrom(MagicDamage.causeDirectMagicDamage(caster, DamageType.FIRE), 6.0f * damageMultiplier);
+				
+				target.motionX = motionX;
+				target.motionY = motionY;
+				target.motionZ = motionZ;
+			}else{
+				if(!world.isRemote && ticksInUse == 1) caster.addChatComponentMessage(new ChatComponentTranslation("spell.resist", target.getCommandSenderName(), this.getDisplayNameWithFormatting()));
+			}
+			
+		}else if(rayTrace != null && rayTrace.typeOfHit == MovingObjectType.BLOCK){
+			
+			int blockHitX = rayTrace.blockX;
+			int blockHitY = rayTrace.blockY;
+			int blockHitZ = rayTrace.blockZ;
+			int blockHitSide = rayTrace.sideHit;
+			boolean flag = false;
+			switch(blockHitSide){
+			case 0:
+				if(world.isAirBlock(blockHitX, blockHitY-1, blockHitZ)){
+					if(!world.isRemote){
+						world.setBlock(blockHitX, blockHitY-1, blockHitZ, Blocks.fire);
+					}
+					flag = true;
+				}
+				break;
+			case 1:
+				if(world.isAirBlock(blockHitX, blockHitY+1, blockHitZ)){
+					if(!world.isRemote){
+						world.setBlock(blockHitX, blockHitY+1, blockHitZ, Blocks.fire);
+					}
+					flag = true;
+				}
+				break;
+			case 2:
+				if(world.isAirBlock(blockHitX, blockHitY, blockHitZ-1)){
+					if(!world.isRemote){
+						world.setBlock(blockHitX, blockHitY, blockHitZ-1, Blocks.fire);
+					}
+					flag = true;
+				}
+				break;
+			case 3:
+				if(world.isAirBlock(blockHitX, blockHitY, blockHitZ+1)){
+					if(!world.isRemote){
+						world.setBlock(blockHitX, blockHitY, blockHitZ+1, Blocks.fire);
+					}
+					flag = true;
+				}
+				break;
+			case 4:
+				if(world.isAirBlock(blockHitX-1, blockHitY, blockHitZ)){
+					if(!world.isRemote){
+						world.setBlock(blockHitX-1, blockHitY, blockHitZ, Blocks.fire);
+					}
+					flag = true;
+				}
+				break;
+			case 5:
+				if(world.isAirBlock(blockHitX+1, blockHitY, blockHitZ)){
+					if(!world.isRemote){
+						world.setBlock(blockHitX+1, blockHitY, blockHitZ, Blocks.fire);
+					}
+					flag = true;
+				}
+				break;
+			}
+		}
+		
+		if(world.isRemote){
+			for(int i=0; i<40; i++){
+				// I figured it out! when on client side, entityplayer.posY is at the eyes, not the feet!
+				double x1 = caster.posX + look.xCoord*i/2 + world.rand.nextFloat()*0.6f - 0.3f;
+				double y1 = WizardryUtilities.getPlayerEyesPos(caster) - 0.4f + look.yCoord*i/2 + world.rand.nextFloat()*0.4f - 0.2f;
+				double z1 = caster.posZ + look.zCoord*i/2 + world.rand.nextFloat()*0.6f - 0.3f;
+				Wizardry.proxy.spawnParticle(EnumParticleType.MAGIC_FIRE, world, x1, y1, z1, look.xCoord*rangeMultiplier, look.yCoord*rangeMultiplier, look.zCoord*rangeMultiplier, 0, 3 + world.rand.nextFloat(), 0, 0);
+				Wizardry.proxy.spawnParticle(EnumParticleType.MAGIC_FIRE, world, x1, y1, z1, look.xCoord*rangeMultiplier, look.yCoord*rangeMultiplier, look.zCoord*rangeMultiplier, 0, 3 + world.rand.nextFloat(), 0, 0);
+			}
+		}
+		if(ticksInUse % 16 == 0){
+			if(ticksInUse == 0) world.playAuxSFX(1009, (int)caster.posX, (int)caster.posY, (int)caster.posZ, 0);
+			world.playSoundAtEntity(caster, "wizardry:flameray", 0.5F, 1.0f);
+		}
 		return true;
 	}
 
-	@Override
-	protected void spawnParticleEffect(World world, Vec3d origin, double radius, @Nullable EntityLivingBase caster, SpellModifiers modifiers){
-
-		for(int i=0; i<100; i++){
-			float r = world.rand.nextFloat();
-			double speed = 0.02/r * (1 + world.rand.nextDouble());//(world.rand.nextBoolean() ? 1 : -1) * (0.05 + 0.02 * world.rand.nextDouble());
-			ParticleBuilder.create(Type.MAGIC_FIRE)
-					.pos(origin.x, origin.y + world.rand.nextDouble() * 3, origin.z)
-					.vel(0, 0, 0)
-					.scale(2)
-					.time(40 + world.rand.nextInt(10))
-					.spin(world.rand.nextDouble() * (radius - 0.5) + 0.5, speed)
-					.spawn(world);
-		}
-
-		for(int i=0; i<60; i++){
-			float r = world.rand.nextFloat();
-			double speed = 0.02/r * (1 + world.rand.nextDouble());//(world.rand.nextBoolean() ? 1 : -1) * (0.05 + 0.02 * world.rand.nextDouble());
-			ParticleBuilder.create(Type.CLOUD)
-					.pos(origin.x, origin.y + world.rand.nextDouble() * 2.5, origin.z)
-					.clr(DrawingUtils.mix(DrawingUtils.mix(0xffbe00, 0xff3600, r/0.6f), 0x222222, (r - 0.6f)/0.4f))
-					.spin(r * (radius - 1) + 0.5, speed)
-					.spawn(world);
-		}
-	}
-
-	private void burnNearbyBlocks(World world, Vec3d origin, @Nullable EntityLivingBase caster, SpellModifiers modifiers){
-
-		if(!world.isRemote && EntityUtils.canDamageBlocks(caster, world)){
-
-			double radius = getProperty(EFFECT_RADIUS).floatValue() * modifiers.get(WizardryItems.blast_upgrade);
-
-			for(int i = -(int)radius; i <= (int)radius; i++){
-				for(int j = -(int)radius; j <= (int)radius; j++){
-
-					BlockPos pos = new BlockPos(origin).add(i, 0, j);
-
-					Integer y = BlockUtils.getNearestSurface(world, new BlockPos(pos), EnumFacing.UP, (int)radius, true, SurfaceCriteria.NOT_AIR_TO_AIR);
-
-					if(y != null){
-
-						pos = new BlockPos(pos.getX(), y, pos.getZ());
-
-						double dist = origin.distanceTo(new Vec3d(origin.x + i, y, origin.z + j));
-
-						// Randomised with weighting so that the nearer the block the more likely it is to be set alight.
-						if(y != -1 && world.rand.nextInt((int)(dist * 2) + 1) < radius && dist < radius && dist > 1.5
-								&& BlockUtils.canPlaceBlock(caster, world, pos)){
-							world.setBlockState(pos, Blocks.FIRE.getDefaultState());
-						}
-					}
-				}
-			}
-		}
-	}
 
 }

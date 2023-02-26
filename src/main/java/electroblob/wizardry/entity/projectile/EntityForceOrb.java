@@ -1,84 +1,112 @@
 package electroblob.wizardry.entity.projectile;
 
-import electroblob.wizardry.registry.Spells;
-import electroblob.wizardry.registry.WizardrySounds;
-import electroblob.wizardry.spell.Spell;
-import electroblob.wizardry.util.EntityUtils;
-import electroblob.wizardry.util.MagicDamage;
-import electroblob.wizardry.util.MagicDamage.DamageType;
-import electroblob.wizardry.util.ParticleBuilder;
-import electroblob.wizardry.util.ParticleBuilder.Type;
-import net.minecraft.entity.EntityLivingBase;
-import net.minecraft.util.EnumParticleTypes;
-import net.minecraft.util.math.RayTraceResult;
-import net.minecraft.world.World;
-
 import java.util.List;
 
-public class EntityForceOrb extends EntityBomb {
+import electroblob.wizardry.EnumParticleType;
+import electroblob.wizardry.MagicDamage;
+import electroblob.wizardry.Wizardry;
+import electroblob.wizardry.WizardryUtilities;
+import electroblob.wizardry.MagicDamage.DamageType;
+import electroblob.wizardry.client.particle.EntitySparkleFX;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.EntityLivingBase;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.util.MovingObjectPosition;
+import net.minecraft.world.World;
+
+public class EntityForceOrb extends EntityMagicProjectile {
 	
-	public EntityForceOrb(World world){
-		super(world);
-	}
+	/** The entity blast multiplier. Only some projectiles cause a blast, which is why this isn't in EntityMagicProjectile. */
+	public float blastMultiplier;
+	
+    public EntityForceOrb(World par1World)
+    {
+        super(par1World);
+    }
 
-	@Override
-	public int getLifetime(){
-		return -1;
-	}
+    public EntityForceOrb(World par1World, EntityLivingBase par2EntityLivingBase)
+    {
+        super(par1World, par2EntityLivingBase);
+    }
+    
+    public EntityForceOrb(World par1World, EntityLivingBase par2EntityLivingBase, float damageMultiplier, float blastMultiplier)
+    {
+        super(par1World, par2EntityLivingBase, damageMultiplier);
+        this.blastMultiplier = blastMultiplier;
+    }
 
-	@Override
-	protected void onImpact(RayTraceResult par1RayTraceResult){
+    public EntityForceOrb(World par1World, double par2, double par4, double par6)
+    {
+        super(par1World, par2, par4, par6);
+    }
 
-		if(par1RayTraceResult.entityHit != null){
-			// This is if the force orb gets a direct hit
-			this.playSound(WizardrySounds.ENTITY_FORCE_ORB_HIT, 1.0F, 1.2F / (this.rand.nextFloat() * 0.2F + 0.9F));
-		}
+    /**
+     * Called when this EntityThrowable hits a block or entity.
+     */
+    protected void onImpact(MovingObjectPosition par1MovingObjectPosition){
+    	
+        if (par1MovingObjectPosition.entityHit != null)
+        {
+        	// This is if the force orb gets a direct hit
+            this.playSound("game.neutral.hurt", 1.0F, 1.2F / (this.rand.nextFloat() * 0.2F + 0.9F));
+        }
+        
+        // Particle effect
+        if(this.worldObj.isRemote){
+            this.worldObj.spawnParticle("largeexplode", this.posX, this.posY, this.posZ, 0, 0, 0);
+    		for(int j=0; j<20; j++){
+        		float brightness = 0.5f + (rand.nextFloat()/2);
+    			double x = this.posX - 0.25d + (rand.nextDouble()/2);
+    			double y = this.posY - 0.25d + (rand.nextDouble()/2);
+    			double z = this.posZ - 0.25d + (rand.nextDouble()/2);
+    			Wizardry.proxy.spawnParticle(EnumParticleType.SPARKLE, worldObj, x, y, z, (x - this.posX)*2, (y - this.posY)*2, (z - this.posZ)*2, 6, brightness, 1.0f, brightness + 0.2f);
+    		}
+    	}
 
-		// Particle effect
-		if(this.world.isRemote){
-			for(int j = 0; j < 20; j++){
-				float brightness = 0.5f + (rand.nextFloat() / 2);
-				ParticleBuilder.create(Type.SPARKLE, rand, posX, posY, posZ, 0.25, true).time(6)
-				.clr(brightness, 1.0f, brightness + 0.2f).spawn(world);
-			}
-			this.world.spawnParticle(EnumParticleTypes.EXPLOSION_LARGE, this.posX, this.posY, this.posZ, 0, 0, 0);
-		}
-
-		if(!this.world.isRemote){
-
-			// 2 gives a cool flanging effect!
-			float pitch = this.rand.nextFloat() * 0.2F + 0.3F;
-			this.playSound(WizardrySounds.ENTITY_FORCE_ORB_HIT_BLOCK, 1.5F, pitch);
-			this.playSound(WizardrySounds.ENTITY_FORCE_ORB_HIT_BLOCK, 1.5F, pitch - 0.01f);
-
-			double blastRadius = Spells.force_orb.getProperty(Spell.BLAST_RADIUS).floatValue() * blastMultiplier;
-
-			List<EntityLivingBase> targets = EntityUtils.getLivingWithinRadius(blastRadius, this.posX,
-					this.posY, this.posZ, this.world);
-
+        if(!this.worldObj.isRemote){
+        	
+	        // 2 gives a cool flanging effect!
+	        float pitch = this.rand.nextFloat() * 0.2F + 0.3F;
+	        this.playSound("fireworks.blast", 1.5F, pitch);
+	        this.playSound("fireworks.blast", 1.5F, pitch - 0.01f);
+	        
+	        double blastRadius = 4.0d*blastMultiplier;
+	        
+			List<EntityLivingBase> targets = WizardryUtilities.getEntitiesWithinRadius(blastRadius, this.posX, this.posY, this.posZ, this.worldObj);
+			
 			for(EntityLivingBase target : targets){
 				if(target != this.getThrower()){
-
+					
+					double velX = target.motionX;
 					double velY = target.motionY;
+					double velZ = target.motionZ;
+					
+					double dx = this.posX-target.posX > 0? -0.5 - (this.posX-target.posX)/8 : 0.5 - (this.posX-target.posX)/8;
+					double dz = this.posZ-target.posZ > 0? -0.5 - (this.posZ-target.posZ)/8 : 0.5 - (this.posZ-target.posZ)/8;
+					
+					float damage = 4*damageMultiplier;
 
-					double dx = this.posX - target.posX > 0 ? -0.5 - (this.posX - target.posX) / 8
-							: 0.5 - (this.posX - target.posX) / 8;
-					double dz = this.posZ - target.posZ > 0 ? -0.5 - (this.posZ - target.posZ) / 8
-							: 0.5 - (this.posZ - target.posZ) / 8;
-
-					float damage = Spells.force_orb.getProperty(Spell.DAMAGE).floatValue() * damageMultiplier;
-
-					target.attackEntityFrom(
-							MagicDamage.causeIndirectMagicDamage(this, this.getThrower(), DamageType.BLAST), damage);
+		            target.attackEntityFrom(MagicDamage.causeIndirectEntityMagicDamage(this, this.getThrower(), DamageType.BLAST), damage);
 
 					target.motionX = dx;
 					target.motionY = velY + 0.4;
 					target.motionZ = dz;
 				}
 			}
+			
+            this.setDead();
+        }
+    }
 
-			this.setDead();
-		}
+	@Override
+	public void readEntityFromNBT(NBTTagCompound nbttagcompound){
+    	super.readEntityFromNBT(nbttagcompound);
+        blastMultiplier = nbttagcompound.getFloat("blastMultiplier");
 	}
-	
+
+	@Override
+	public void writeEntityToNBT(NBTTagCompound nbttagcompound){
+		super.writeEntityToNBT(nbttagcompound);
+		nbttagcompound.setFloat("blastMultiplier", blastMultiplier);
+	}
 }

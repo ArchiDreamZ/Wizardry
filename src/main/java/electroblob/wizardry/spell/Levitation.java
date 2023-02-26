@@ -1,60 +1,36 @@
 package electroblob.wizardry.spell;
 
+import electroblob.wizardry.EnumElement;
+import electroblob.wizardry.EnumParticleType;
+import electroblob.wizardry.EnumSpellType;
+import electroblob.wizardry.EnumTier;
 import electroblob.wizardry.Wizardry;
-import electroblob.wizardry.item.SpellActions;
-import electroblob.wizardry.util.ParticleBuilder;
-import electroblob.wizardry.util.ParticleBuilder.Type;
-import electroblob.wizardry.util.SpellModifiers;
-import net.minecraft.entity.EntityLivingBase;
+import electroblob.wizardry.WizardryUtilities;
 import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.util.EnumHand;
-import net.minecraft.util.SoundEvent;
+import net.minecraft.item.EnumAction;
 import net.minecraft.world.World;
 
 public class Levitation extends Spell {
 
-	public static final String SPEED = "speed";
-	public static final String ACCELERATION = "acceleration";
-
-	public Levitation(){
-		super("levitation", SpellActions.POINT_DOWN, true);
-		addProperties(SPEED, ACCELERATION);
-		soundValues(0.5f, 1, 0);
+	public Levitation() {
+		super(EnumTier.ADVANCED, 10, EnumElement.SORCERY, "levitation", EnumSpellType.UTILITY, 0, EnumAction.bow, true);
 	}
 
 	@Override
-	protected SoundEvent[] createSounds(){
-		return this.createContinuousSpellSounds();
-	}
+	public boolean cast(World world, EntityPlayer caster, int ticksInUse, float damageMultiplier, float rangeMultiplier, float durationMultiplier, float blastMultiplier) {
+		
+		caster.fallDistance = 0;
 
-	@Override
-	protected void playSound(World world, EntityLivingBase entity, int ticksInUse, int duration, SpellModifiers modifiers, String... sounds){
-		this.playSoundLoop(world, entity, ticksInUse);
-	}
-
-	@Override
-	protected void playSound(World world, double x, double y, double z, int ticksInUse, int duration, SpellModifiers modifiers, String... sounds){
-		this.playSoundLoop(world, x, y, z, ticksInUse, duration);
-	}
-
-	@Override
-	public boolean cast(World world, EntityPlayer caster, EnumHand hand, int ticksInUse, SpellModifiers modifiers){
-
-		if(!Wizardry.settings.replaceVanillaFallDamage) caster.fallDistance = 0;
-
-		caster.motionY = caster.motionY < getProperty(SPEED).floatValue() ? caster.motionY
-				+ getProperty(ACCELERATION).floatValue() : caster.motionY;
-
+		caster.motionY = caster.motionY < 0.5d ? caster.motionY + 0.1d : caster.motionY;
+		
 		if(world.isRemote){
-			double x = caster.posX - 0.25 + world.rand.nextDouble() * 0.5;
-			double y = caster.getPositionEyes(1).y;
-			double z = caster.posZ - 0.25 + world.rand.nextDouble() * 0.5;
-			ParticleBuilder.create(Type.SPARKLE).pos(x, y, z).vel(0, -0.1, 0).time(15).clr(0.5f, 1, 0.7f).spawn(world);
+			Wizardry.proxy.spawnParticle(EnumParticleType.SPARKLE, world, caster.posX - 0.25d + world.rand.nextDouble()/2, WizardryUtilities.getPlayerEyesPos(caster) - 1.5f, caster.posZ - 0.25d + world.rand.nextDouble()/2, 0, -0.1F, 0, 15, 0.5f, 1.0f, 0.7f);
 		}
-
-		this.playSound(world, caster, ticksInUse, -1, modifiers);
-
+		if(ticksInUse % 24 == 0 && world.isRemote){
+			Wizardry.proxy.playMovingSound(caster, "wizardry:sparkle", 0.5F, 1.0f, false);
+		}
 		return true;
 	}
+
 
 }

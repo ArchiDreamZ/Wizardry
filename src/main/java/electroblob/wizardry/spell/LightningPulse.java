@@ -1,84 +1,76 @@
 package electroblob.wizardry.spell;
 
-import electroblob.wizardry.item.SpellActions;
-import electroblob.wizardry.registry.WizardryItems;
-import electroblob.wizardry.util.*;
-import electroblob.wizardry.util.MagicDamage.DamageType;
-import electroblob.wizardry.util.ParticleBuilder.Type;
+import java.util.List;
+
+import electroblob.wizardry.EnumElement;
+import electroblob.wizardry.EnumSpellType;
+import electroblob.wizardry.EnumTier;
+import electroblob.wizardry.MagicDamage;
+import electroblob.wizardry.WizardryUtilities;
+import electroblob.wizardry.MagicDamage.DamageType;
+import electroblob.wizardry.entity.construct.EntityLightningPulse;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
-import net.minecraft.network.play.server.SPacketEntityVelocity;
-import net.minecraft.util.EnumHand;
-import net.minecraft.util.SoundEvent;
-import net.minecraft.util.math.MathHelper;
+import net.minecraft.item.EnumAction;
+import net.minecraft.network.play.server.S12PacketEntityVelocity;
+import net.minecraft.util.MathHelper;
 import net.minecraft.world.World;
-
-import java.util.List;
 
 public class LightningPulse extends Spell {
 
-	public static final String REPULSION_VELOCITY = "repulsion_velocity";
-
-	public LightningPulse(){
-		super("lightning_pulse", SpellActions.POINT_DOWN, false);
-		addProperties(EFFECT_RADIUS, DAMAGE, REPULSION_VELOCITY);
-		this.soundValues(2, 1, 0);
-	}
-	
-	// TODO: NPC casting support
-
-	@Override
-	protected SoundEvent[] createSounds(){
-		return createSoundsWithSuffixes("spark", "explosion");
+	public LightningPulse() {
+		super(EnumTier.ADVANCED, 25, EnumElement.LIGHTNING, "lightning_pulse", EnumSpellType.ATTACK, 75, EnumAction.none, false);
 	}
 
 	@Override
-	public boolean cast(World world, EntityPlayer caster, EnumHand hand, int ticksInUse, SpellModifiers modifiers){
+	public boolean doesSpellRequirePacket(){
+		return false;
+	}
 
+	@Override
+	public boolean cast(World world, EntityPlayer caster, int ticksInUse, float damageMultiplier, float rangeMultiplier, float durationMultiplier, float blastMultiplier) {
+		
 		if(caster.onGround){
-
-			List<EntityLivingBase> targets = EntityUtils.getLivingWithinRadius(
-					getProperty(EFFECT_RADIUS).floatValue() * modifiers.get(WizardryItems.blast_upgrade),
-					caster.posX, caster.posY, caster.posZ, world);
-
+			
+			List<EntityLivingBase> targets = WizardryUtilities.getEntitiesWithinRadius(3.0d*blastMultiplier, caster.posX, caster.posY, caster.posZ, world);
+			
 			for(EntityLivingBase target : targets){
-				if(AllyDesignationSystem.isValidTarget(caster, target)){
-					// Base damage is 4 hearts no matter where the target is.
-					target.attackEntityFrom(MagicDamage.causeDirectMagicDamage(caster, DamageType.SHOCK),
-							getProperty(DAMAGE).floatValue() * modifiers.get(SpellModifiers.POTENCY));
-
+				if(WizardryUtilities.isValidTarget(caster, target)){
+					// Damage is 4 hearts no matter where the target is.
+					target.attackEntityFrom(MagicDamage.causeDirectMagicDamage(caster, DamageType.SHOCK), 8 * damageMultiplier);
+					
 					if(!world.isRemote){
-
+						
 						double dx = target.posX - caster.posX;
 						double dz = target.posZ - caster.posZ;
 						// Normalises the velocity.
-						double vectorLength = MathHelper.sqrt(dx * dx + dz * dz);
+						double vectorLength = MathHelper.sqrt_double(dx*dx + dz*dz);
 						dx /= vectorLength;
 						dz /= vectorLength;
-
-						target.motionX = getProperty(REPULSION_VELOCITY).floatValue() * dx;
+						
+						target.motionX = 0.8 * dx;
 						target.motionY = 0;
-						target.motionZ = getProperty(REPULSION_VELOCITY).floatValue() * dz;
+						target.motionZ = 0.8 * dz;
 
 						// Player motion is handled on that player's client so needs packets
 						if(target instanceof EntityPlayerMP){
-							((EntityPlayerMP)target).connection.sendPacket(new SPacketEntityVelocity(target));
+							((EntityPlayerMP)target).playerNetServerHandler.sendPacket(new S12PacketEntityVelocity(target));
 						}
 					}
 				}
 			}
-			
-			if(world.isRemote){
-				ParticleBuilder.create(Type.LIGHTNING_PULSE).pos(caster.posX, caster.posY
-						+ GeometryUtils.ANTI_Z_FIGHTING_OFFSET, caster.posZ)
-				.scale(modifiers.get(WizardryItems.blast_upgrade)).spawn(world);
+			if(!world.isRemote){
+				EntityLightningPulse lightningpulse = new EntityLightningPulse(world, caster.posX, caster.boundingBox.minY, caster.posZ, caster, 7, damageMultiplier);
+				world.spawnEntityInWorld(lightningpulse);
 			}
-
-			this.playSound(world, caster, ticksInUse, -1, modifiers);
+			caster.swingItem();
+			world.playSoundAtEntity(caster, "wizardry:electricitya", 1.0f, 1.0f);
+			world.playSoundAtEntity(caster, "wizardry:boom", 2.0f, 1.0f);
 			return true;
 		}
 		return false;
 	}
+
 
 }

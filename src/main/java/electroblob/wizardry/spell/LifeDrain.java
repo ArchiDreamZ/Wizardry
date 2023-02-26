@@ -1,82 +1,72 @@
 package electroblob.wizardry.spell;
 
-import electroblob.wizardry.item.SpellActions;
-import electroblob.wizardry.util.EntityUtils;
-import electroblob.wizardry.util.MagicDamage;
-import electroblob.wizardry.util.MagicDamage.DamageType;
-import electroblob.wizardry.util.ParticleBuilder;
-import electroblob.wizardry.util.ParticleBuilder.Type;
-import electroblob.wizardry.util.SpellModifiers;
-import net.minecraft.entity.Entity;
+import electroblob.wizardry.EnumElement;
+import electroblob.wizardry.EnumParticleType;
+import electroblob.wizardry.EnumSpellType;
+import electroblob.wizardry.EnumTier;
+import electroblob.wizardry.MagicDamage;
+import electroblob.wizardry.Wizardry;
+import electroblob.wizardry.WizardryUtilities;
+import electroblob.wizardry.MagicDamage.DamageType;
 import net.minecraft.entity.EntityLivingBase;
-import net.minecraft.util.EnumFacing;
-import net.minecraft.util.SoundEvent;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.item.EnumAction;
+import net.minecraft.util.MovingObjectPosition;
+import net.minecraft.util.MovingObjectPosition.MovingObjectType;
+import net.minecraft.util.Vec3;
 import net.minecraft.world.World;
 
-public class LifeDrain extends SpellRay {
+public class LifeDrain extends Spell {
 
-	public static final String HEAL_FACTOR = "heal_factor";
-
-	public LifeDrain(){
-		super("life_drain", SpellActions.POINT, true);
-		this.particleVelocity(-0.5);
-		this.particleSpacing(0.4);
-		addProperties(DAMAGE, HEAL_FACTOR);
-		this.soundValues(0.6f, 1, 0);
+	public LifeDrain() {
+		super(EnumTier.APPRENTICE, 10, EnumElement.NECROMANCY, "life_drain", EnumSpellType.ATTACK, 0, EnumAction.none, true);
 	}
 
 	@Override
-	protected SoundEvent[] createSounds(){
-		return this.createContinuousSpellSounds();
-	}
+	public boolean cast(World world, EntityPlayer caster, int ticksInUse, float damageMultiplier, float rangeMultiplier, float durationMultiplier, float blastMultiplier) {
 
-	@Override
-	protected void playSound(World world, EntityLivingBase entity, int ticksInUse, int duration, SpellModifiers modifiers, String... sounds){
-		this.playSoundLoop(world, entity, ticksInUse);
-	}
+		Vec3 look = caster.getLookVec();
 
-	@Override
-	protected void playSound(World world, double x, double y, double z, int ticksInUse, int duration, SpellModifiers modifiers, String... sounds){
-		this.playSoundLoop(world, x, y, z, ticksInUse, duration);
-	}
+		MovingObjectPosition rayTrace = WizardryUtilities.standardEntityRayTrace(world, caster, 10*rangeMultiplier);
 
-	@Override
-	protected boolean onEntityHit(World world, Entity target, Vec3d hit, EntityLivingBase caster, Vec3d origin, int ticksInUse, SpellModifiers modifiers){
-		
-		if(EntityUtils.isLiving(target)){
-
+		if(rayTrace != null && rayTrace.typeOfHit == MovingObjectType.ENTITY && rayTrace.entityHit instanceof EntityLivingBase){
+			
+			EntityLivingBase target = (EntityLivingBase) rayTrace.entityHit;
+			
 			if(ticksInUse % 12 == 0){
-				
-				float damage = getProperty(DAMAGE).floatValue() * modifiers.get(SpellModifiers.POTENCY);
-				
-				EntityUtils.attackEntityWithoutKnockback(target, MagicDamage.causeDirectMagicDamage(caster,
-						DamageType.MAGIC), damage);
-				
-				if(caster != null) caster.heal(damage * getProperty(HEAL_FACTOR).floatValue());
+				// This motion stuff removes knockback, which is desirable for continuous spells.
+				double motionX = target.motionX;
+				double motionY = target.motionY;
+				double motionZ = target.motionZ;
+
+				target.attackEntityFrom(MagicDamage.causeDirectMagicDamage(caster, DamageType.MAGIC), 2.0f * damageMultiplier);
+
+				target.motionX = motionX;
+				target.motionY = motionY;
+				target.motionZ = motionZ;
+
+				caster.heal(1);
 			}
 		}
-		
+		if(world.isRemote){
+			for(int i=5; i<(int)(25*rangeMultiplier); i+=2){
+				// I figured it out! when on client side, entityplayer.posY is at the eyes, not the feet!
+				double x1 = caster.posX + look.xCoord*i/2 + world.rand.nextFloat()/5 - 0.1f;
+				double y1 = WizardryUtilities.getPlayerEyesPos(caster) - 0.4f + look.yCoord*i/2 + world.rand.nextFloat()/5 - 0.1f;
+				double z1 = caster.posZ + look.zCoord*i/2 + world.rand.nextFloat()/5 - 0.1f;
+				//world.spawnParticle("mobSpell", x1, y1, z1, -1*look.xCoord, -1*look.yCoord, -1*look.zCoord);
+				if(i % 5 == 0){
+					Wizardry.proxy.spawnParticle(EnumParticleType.DARK_MAGIC, world, x1, y1, z1, 0.0d, 0.0d, 0.0d, 0, 0.1f, 0.0f, 0.0f);
+				}
+				Wizardry.proxy.spawnParticle(EnumParticleType.SPARKLE, world, x1, y1, z1, -0.05*look.xCoord*i, -0.05*look.yCoord*i, -0.05*look.zCoord*i, 8 + world.rand.nextInt(6), 0.5f, 0.0f, 0.0f);
+			}
+		}
+		if(ticksInUse % 18 == 0){
+			if(ticksInUse == 0) world.playSoundAtEntity(caster, "wizardry:darkaura", 1.0F, 0.6f);
+			world.playSoundAtEntity(caster, "wizardry:crackle", 2.0F, 1.0f);
+		}
 		return true;
 	}
 
-	@Override
-	protected boolean onBlockHit(World world, BlockPos pos, EnumFacing side, Vec3d hit, EntityLivingBase caster, Vec3d origin, int ticksInUse, SpellModifiers modifiers){
-		return false;
-	}
-
-	@Override
-	protected boolean onMiss(World world, EntityLivingBase caster, Vec3d origin, Vec3d direction, int ticksInUse, SpellModifiers modifiers){
-		return true;
-	}
-	
-	@Override
-	protected void spawnParticle(World world, double x, double y, double z, double vx, double vy, double vz){
-		if(world.rand.nextInt(5) == 0) ParticleBuilder.create(Type.DARK_MAGIC).pos(x, y, z).clr(0.1f, 0, 0).spawn(world);
-		// This used to multiply the velocity by the distance from the caster
-		ParticleBuilder.create(Type.SPARKLE).pos(x, y, z).vel(vx, vy, vz).time(8 + world.rand.nextInt(6))
-		.clr(0.5f, 0, 0).spawn(world);
-	}
 
 }

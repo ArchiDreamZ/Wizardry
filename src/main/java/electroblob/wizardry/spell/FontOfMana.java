@@ -1,61 +1,52 @@
 package electroblob.wizardry.spell;
 
-import electroblob.wizardry.event.SpellCastEvent;
-import electroblob.wizardry.item.SpellActions;
-import electroblob.wizardry.registry.WizardryItems;
-import electroblob.wizardry.registry.WizardryPotions;
-import electroblob.wizardry.util.ParticleBuilder;
-import electroblob.wizardry.util.ParticleBuilder.Type;
-import electroblob.wizardry.util.SpellModifiers;
+import java.util.List;
+
+import electroblob.wizardry.EnumElement;
+import electroblob.wizardry.EnumParticleType;
+import electroblob.wizardry.EnumSpellType;
+import electroblob.wizardry.EnumTier;
+import electroblob.wizardry.Wizardry;
+import electroblob.wizardry.WizardryUtilities;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.item.EnumAction;
+import net.minecraft.potion.Potion;
 import net.minecraft.potion.PotionEffect;
-import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
-import net.minecraftforge.fml.common.Mod.EventBusSubscriber;
-import net.minecraftforge.fml.common.eventhandler.EventPriority;
-import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 
-import javax.annotation.Nullable;
+public class FontOfMana extends Spell {
 
-@EventBusSubscriber
-public class FontOfMana extends SpellAreaEffect {
-
-	public FontOfMana(){
-		super("font_of_mana", SpellActions.POINT_UP, false);
-		this.soundValues(0.7f, 1.2f, 0.4f);
-		this.particleDensity(1.25f);
-		this.targetAllies(true);
-		this.alwaysSucceed(true);
-		addProperties(EFFECT_DURATION, EFFECT_STRENGTH);
+	public FontOfMana() {
+		super(EnumTier.MASTER, 250, EnumElement.HEALING, "font_of_mana", EnumSpellType.UTILITY, 5000, EnumAction.bow, false);
 	}
 
 	@Override
-	protected boolean affectEntity(World world, Vec3d origin, @Nullable EntityLivingBase caster, EntityLivingBase target, int targetCount, int ticksInUse, SpellModifiers modifiers){
+	public boolean cast(World world, EntityPlayer caster, int ticksInUse, float damageMultiplier, float rangeMultiplier, float durationMultiplier, float blastMultiplier) {
+		
+		List<EntityPlayer> targets = WizardryUtilities.getEntitiesWithinRadius(5*blastMultiplier, caster.posX, caster.posY, caster.posZ, world, EntityPlayer.class);
+		
+		for(EntityPlayer target : targets){
+			if(WizardryUtilities.isPlayerAlly(caster, target) || target == caster){
+				// Damage multiplier can only ever be 1 or 1.6 for master spells, so there's little point in actually calculating this.
+				target.addPotionEffect(new PotionEffect(Wizardry.fontOfMana.id, (int)(600*durationMultiplier), damageMultiplier > 1 ? 1 : 0));
+			}
+		}
+		
+		if(world.isRemote){
+			for(int i=0;i<100*blastMultiplier;i++){
+        		double radius = (1 + world.rand.nextDouble()*4)*blastMultiplier;
+        		double angle = world.rand.nextDouble()*Math.PI*2;
+        		float hue = world.rand.nextFloat()*0.4f;
+				Wizardry.proxy.spawnParticle(EnumParticleType.SPARKLE, world, caster.posX + radius*Math.cos(angle), WizardryUtilities.getEntityFeetPos(caster), caster.posZ + radius*Math.sin(angle),
+						0, 0.03, 0, 50, 1, 1-hue, 0.6f+hue);
 
-		if(target instanceof EntityPlayer){ // Font of mana is only useful to players
-			target.addPotionEffect(new PotionEffect(WizardryPotions.font_of_mana,
-					(int)(getProperty(EFFECT_DURATION).floatValue() * modifiers.get(WizardryItems.duration_upgrade)),
-					(int)(getProperty(EFFECT_STRENGTH).intValue() + (modifiers.get(SpellModifiers.POTENCY) - 1) * 2)));
+			}
 		}
 
+		world.playSoundAtEntity(caster, "wizardry:heal", 0.7F, world.rand.nextFloat() * 0.4F + 1.0F);
 		return true;
 	}
 
-	@Override
-	protected void spawnParticle(World world, double x, double y, double z){
-		float hue = world.rand.nextFloat() * 0.4f;
-		ParticleBuilder.create(Type.SPARKLE).pos(x, y, z).vel(0, 0.03, 0).time(50)
-				.clr(1, 1 - hue, 0.6f + hue).spawn(world);
-	}
 
-	@SubscribeEvent(priority = EventPriority.LOW) // Doesn't really matter but there's no point processing it if casting is blocked
-	public static void onSpellCastPreEvent(SpellCastEvent.Pre event){
-		// Moved from ItemWand (quite why this wasn't done with modifiers before I don't know!)
-		if(event.getCaster() != null && event.getCaster().isPotionActive(WizardryPotions.font_of_mana)){
-			// Dividing by this rather than setting it takes upgrades and font of mana into account simultaneously
-			event.getModifiers().set(WizardryItems.cooldown_upgrade, event.getModifiers().get(WizardryItems.cooldown_upgrade)
-					/ (2 + event.getCaster().getActivePotionEffect(WizardryPotions.font_of_mana).getAmplifier()), false);
-		}
-	}
 }

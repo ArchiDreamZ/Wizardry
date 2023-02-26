@@ -1,300 +1,241 @@
 package electroblob.wizardry.tileentity;
 
+import cpw.mods.fml.relauncher.Side;
+import cpw.mods.fml.relauncher.SideOnly;
+import electroblob.wizardry.WandHelper;
 import electroblob.wizardry.Wizardry;
-import electroblob.wizardry.inventory.ContainerArcaneWorkbench;
-import electroblob.wizardry.item.IManaStoringItem;
-import electroblob.wizardry.item.IWorkbenchItem;
-import electroblob.wizardry.item.ItemCrystal;
-import electroblob.wizardry.item.ItemSpellBook;
-import electroblob.wizardry.registry.WizardryBlocks;
-import electroblob.wizardry.registry.WizardryItems;
-import electroblob.wizardry.util.NBTExtras;
-import electroblob.wizardry.util.WandHelper;
+import electroblob.wizardry.item.ItemWand;
+import electroblob.wizardry.item.ItemWizardArmour;
 import net.minecraft.block.Block;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.inventory.IInventory;
-import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
 import net.minecraft.network.NetworkManager;
-import net.minecraft.network.play.server.SPacketUpdateTileEntity;
+import net.minecraft.network.Packet;
+import net.minecraft.network.play.server.S35PacketUpdateTileEntity;
 import net.minecraft.tileentity.TileEntity;
-import net.minecraft.util.ITickable;
-import net.minecraft.util.NonNullList;
-import net.minecraft.util.math.AxisAlignedBB;
-import net.minecraftforge.common.util.Constants.NBT;
-import net.minecraftforge.fml.relauncher.Side;
-import net.minecraftforge.fml.relauncher.SideOnly;
+import net.minecraft.util.AxisAlignedBB;
+import net.minecraftforge.common.util.Constants;
 
-import java.util.HashSet;
-import java.util.Set;
+public class TileEntityArcaneWorkbench extends TileEntity implements IInventory {
 
-public class TileEntityArcaneWorkbench extends TileEntity implements IInventory, ITickable {
-
-	/** The inventory of the arcane workbench. */
-	private NonNullList<ItemStack> inventory;
-	/** Controls the rotating rune and floating wand animations. */
-	public float timer = 0;
-
-	private boolean doNotSync;
+	private ItemStack[] inv;
+	public float timer;
+	public int yTimer;
+	public int yOffset;
 
 	public TileEntityArcaneWorkbench(){
-		inventory = NonNullList.withSize(ContainerArcaneWorkbench.UPGRADE_SLOT + 1, ItemStack.EMPTY);
-		// Prevent sync() happening when loading from NBT the first time or weirdness ensues when loading a world
-		// Normally I'd pass this as a flag to setInventorySlotContents but we can't change the method signature
-		this.doNotSync = true;
-	}
-
-	@Override
-	public void onLoad(){
+		inv = new ItemStack[ContainerArcaneWorkbench.UPGRADE_SLOT + 1];
 		timer = 0;
-	}
-
-	/** Called to manually sync the tile entity with clients. */
-	public void sync(){
-		if(!doNotSync) this.world.markAndNotifyBlock(pos, null, world.getBlockState(pos), world.getBlockState(pos), 3);
+		yTimer = 0;
+		yOffset = 300;
 	}
 
 	@Override
-	public void update(){
-
-		this.doNotSync = false;
-
-		ItemStack stack = this.getStackInSlot(ContainerArcaneWorkbench.CENTRE_SLOT);
-
+	public void updateEntity(){
+		
+		ItemStack itemstack = this.getStackInSlot(ContainerArcaneWorkbench.WAND_SLOT);
+		
 		// Decrements wand damage (increases mana) every 1.5 seconds if it has a condenser upgrade
-		if(stack.getItem() instanceof IManaStoringItem && !this.world.isRemote && !((IManaStoringItem)stack.getItem()).isManaFull(stack)
-				&& this.world.getTotalWorldTime() % electroblob.wizardry.constants.Constants.CONDENSER_TICK_INTERVAL == 0){
+		if(itemstack != null && itemstack.getItem() instanceof ItemWand && !this.worldObj.isRemote && itemstack.isItemDamaged()
+				&& this.worldObj.getWorldTime() % Wizardry.CONDENSER_TICK_INTERVAL == 0){
 			// If the upgrade level is 0, this does nothing anyway.
-			((IManaStoringItem)stack.getItem()).rechargeMana(stack, WandHelper.getUpgradeLevel(stack, WizardryItems.condenser_upgrade));
+			itemstack.setItemDamage(itemstack.getItemDamage() - WandHelper.getUpgradeLevel(itemstack, Wizardry.condenserUpgrade));
 		}
-
-		// The server doesn't care what these are, and there's no need for them to be synced or saved.
-		if(this.world.isRemote){
+		
+		if(yOffset > 0){
+			yTimer--;
+		}else{
+			yTimer++;
+		}
+		if(timer < 359){
 			timer++;
+		}else{
+			timer = 0;
 		}
+		yOffset += yTimer;
 	}
 
 	@Override
-	public int getSizeInventory(){
-		return inventory.size();
+	public int getSizeInventory() {
+		return inv.length;
 	}
 
 	@Override
-	public ItemStack getStackInSlot(int slot){
-		return inventory.get(slot);
+	public ItemStack getStackInSlot(int slot) {
+		return inv[slot];
 	}
 
 	@Override
-	public ItemStack decrStackSize(int slot, int amount){
-		
+	public ItemStack decrStackSize(int slot, int amt) {
 		ItemStack stack = getStackInSlot(slot);
-		
-		if(!stack.isEmpty()){
-			if(stack.getCount() <= amount){
-				setInventorySlotContents(slot, ItemStack.EMPTY);
-			}else{
-				stack = stack.splitStack(amount);
-				if(stack.getCount() == 0){
-					setInventorySlotContents(slot, ItemStack.EMPTY);
+		if (stack != null) {
+			if (stack.stackSize <= amt) {
+				setInventorySlotContents(slot, null);
+			} else {
+				stack = stack.splitStack(amt);
+				if (stack.stackSize == 0) {
+					setInventorySlotContents(slot, null);
 				}
 			}
-			this.markDirty();
 		}
-		
 		return stack;
 	}
 
 	@Override
-	public ItemStack removeStackFromSlot(int slot){
-		
+	public ItemStack getStackInSlotOnClosing(int slot) {
 		ItemStack stack = getStackInSlot(slot);
-		
-		if(!stack.isEmpty()){
-			setInventorySlotContents(slot, ItemStack.EMPTY);
+		if (stack != null) {
+			setInventorySlotContents(slot, null);
 		}
-		
 		return stack;
 	}
 
 	@Override
-	public void setInventorySlotContents(int slot, ItemStack stack){
-
-		ItemStack previous = inventory.set(slot, stack);
-
-		// Only the central slot affects the in-world rendering, so only sync if that changes
-		// This must be done in the tile entity because containers only exist for player interaction, not hoppers etc.
-		if(slot == ContainerArcaneWorkbench.CENTRE_SLOT && previous.isEmpty() != stack.isEmpty()) this.sync();
-		
-		if(!stack.isEmpty() && stack.getCount() > getInventoryStackLimit()){
-			stack.setCount(getInventoryStackLimit());
-		}
+	public void setInventorySlotContents(int slot, ItemStack stack) {
+		inv[slot] = stack;
+		if (stack != null && stack.stackSize > getInventoryStackLimit()) {
+			stack.stackSize = getInventoryStackLimit();
+		}               
 	}
 
 	@Override
-	public String getName(){
-		return "container." + Wizardry.MODID + ":arcane_workbench";
+	public String getInventoryName() {
+		return "container.arcaneWorkbench";
 	}
 
 	@Override
-	public boolean hasCustomName(){
+	public boolean hasCustomInventoryName() {
 		return false;
 	}
 
 	@Override
-	public int getInventoryStackLimit(){
+	public int getInventoryStackLimit() {
 		return 64;
 	}
 
 	@Override
-	public boolean isUsableByPlayer(EntityPlayer player){
-		return world.getTileEntity(pos) == this && player.getDistanceSqToCenter(pos) < 64;
+	public boolean isUseableByPlayer(EntityPlayer player) {
+		return worldObj.getTileEntity(xCoord, yCoord, zCoord) == this &&
+				player.getDistanceSq(xCoord + 0.5, yCoord + 0.5, zCoord + 0.5) < 64;
 	}
 
 	@Override
-	public void openInventory(EntityPlayer player){
-
-	}
-
-	@Override
-	public void closeInventory(EntityPlayer player){
+	public void openInventory() {
 
 	}
 
 	@Override
-	public boolean isItemValidForSlot(int slotNumber, ItemStack itemstack){
+	public void closeInventory() {
 
-		if(itemstack == ItemStack.EMPTY) return true;
+	}
 
+	@Override
+	public boolean isItemValidForSlot(int slotNumber, ItemStack itemstack) {
+		
+		if(itemstack == null) return true;
+		
 		if(slotNumber >= 0 && slotNumber < ContainerArcaneWorkbench.CRYSTAL_SLOT){
-
-			if(!(itemstack.getItem() instanceof ItemSpellBook)) return false;
-
-			ItemStack centreStack = getStackInSlot(ContainerArcaneWorkbench.CENTRE_SLOT);
-
-			if(centreStack.getItem() instanceof IWorkbenchItem){
-				int spellSlots = ((IWorkbenchItem)centreStack.getItem()).getSpellSlotCount(centreStack);
-				return slotNumber < spellSlots;
-			}
-
-			return false;
-
+			return itemstack.getItem() == Wizardry.spellBook;
+			
 		}else if(slotNumber == ContainerArcaneWorkbench.CRYSTAL_SLOT){
-			return itemstack.getItem() instanceof ItemCrystal;
-
-		}else if(slotNumber == ContainerArcaneWorkbench.CENTRE_SLOT){
-			return itemstack.getItem() instanceof IWorkbenchItem;
-
+			return itemstack.getItem() == Wizardry.magicCrystal;
+			
+		}else if(slotNumber == ContainerArcaneWorkbench.WAND_SLOT){
+			return itemstack != null && (itemstack.getItem() instanceof ItemWand
+					|| itemstack.getItem() instanceof ItemWizardArmour
+					|| itemstack.getItem() == Wizardry.blankScroll);
+			
 		}else if(slotNumber == ContainerArcaneWorkbench.UPGRADE_SLOT){
-			Set<Item> upgrades = new HashSet<>(WandHelper.getSpecialUpgrades());
-			upgrades.add(WizardryItems.arcane_tome);
-			upgrades.add(WizardryItems.resplendent_thread);
-			upgrades.add(WizardryItems.crystal_silver_plating);
-			upgrades.add(WizardryItems.ethereal_crystalweave);
-			return upgrades.contains(itemstack.getItem());
+			return itemstack.getItem() == Wizardry.arcaneTome
+					|| itemstack.getItem() == Wizardry.condenserUpgrade
+					|| itemstack.getItem() == Wizardry.siphonUpgrade
+					|| itemstack.getItem() == Wizardry.storageUpgrade
+					|| itemstack.getItem() == Wizardry.rangeUpgrade
+					|| itemstack.getItem() == Wizardry.durationUpgrade
+					|| itemstack.getItem() == Wizardry.cooldownUpgrade
+					|| itemstack.getItem() == Wizardry.blastUpgrade
+					|| itemstack.getItem() == Wizardry.attunementUpgrade
+					|| itemstack.getItem() == Wizardry.armourUpgrade;
 		}
-
+		
 		return true;
-
+		
 	}
-
 	@Override
-	public void readFromNBT(NBTTagCompound tagCompound){
-
+	public void readFromNBT(NBTTagCompound tagCompound) {
 		super.readFromNBT(tagCompound);
 
-		NBTTagList tagList = tagCompound.getTagList("Inventory", NBT.TAG_COMPOUND);
-		for(int i = 0; i < tagList.tagCount(); i++){
-			NBTTagCompound tag = tagList.getCompoundTagAt(i);
+		NBTTagList tagList = tagCompound.getTagList("Inventory", Constants.NBT.TAG_COMPOUND);
+		for (int i = 0; i < tagList.tagCount(); i++) {
+			NBTTagCompound tag = (NBTTagCompound) tagList.getCompoundTagAt(i);
 			byte slot = tag.getByte("Slot");
-			if(slot >= 0 && slot < getSizeInventory()){
-				setInventorySlotContents(slot, new ItemStack(tag));
+			if (slot >= 0 && slot < inv.length) {
+				inv[slot] = ItemStack.loadItemStackFromNBT(tag);
 			}
 		}
+
+		timer = tagCompound.getFloat("timer");
+		yTimer = tagCompound.getInteger("yTimer");
+		yOffset = tagCompound.getInteger("yOffset");
 	}
 
 	@Override
-	public NBTTagCompound writeToNBT(NBTTagCompound tagCompound){
-
+	public void writeToNBT(NBTTagCompound tagCompound) {
 		super.writeToNBT(tagCompound);
 
 		NBTTagList itemList = new NBTTagList();
-		for(int i = 0; i < getSizeInventory(); i++){
-			ItemStack stack = getStackInSlot(i);
-			NBTTagCompound tag = new NBTTagCompound();
-			tag.setByte("Slot", (byte)i);
-			stack.writeToNBT(tag);
-			itemList.appendTag(tag);
+		for (int i = 0; i < inv.length; i++) {
+			ItemStack stack = inv[i];
+			if (stack != null) {
+				NBTTagCompound tag = new NBTTagCompound();
+				tag.setByte("Slot", (byte) i);
+				stack.writeToNBT(tag);
+				itemList.appendTag(tag);
+			}
 		}
+		tagCompound.setTag("Inventory", itemList);
+		tagCompound.setFloat("timer", timer);
+		tagCompound.setInteger("yTimer", yTimer);
+		tagCompound.setInteger("yOffset", yOffset);
+	}
 
-		NBTExtras.storeTagSafely(tagCompound, "Inventory", itemList);
-		return tagCompound;
+	// Not sure why there were super calls here in the first place.
+	@Override
+	public Packet getDescriptionPacket() {
+		//S35PacketUpdateTileEntity packet = (S35PacketUpdateTileEntity) super.getDescriptionPacket();
+		NBTTagCompound tag = new NBTTagCompound();
+		writeToNBT(tag);
+		return new S35PacketUpdateTileEntity(xCoord, yCoord, zCoord, 1, tag);
 	}
 
 	@Override
-	public final NBTTagCompound getUpdateTag(){
-		return this.writeToNBT(new NBTTagCompound());
-	}
-
-	@Override
-	public SPacketUpdateTileEntity getUpdatePacket(){
-		return new SPacketUpdateTileEntity(pos, 0, this.getUpdateTag());
-	}
-
-	@Override
-	public void onDataPacket(NetworkManager net, SPacketUpdateTileEntity pkt){
-		readFromNBT(pkt.getNbtCompound());
+	public void onDataPacket(NetworkManager net, S35PacketUpdateTileEntity pkt) {
+		//super.onDataPacket(net, pkt);
+		NBTTagCompound tag = pkt.func_148857_g();
+		readFromNBT(tag);
 	}
 
 	@SideOnly(Side.CLIENT)
-	@Override
-	public AxisAlignedBB getRenderBoundingBox(){
+	public AxisAlignedBB getRenderBoundingBox()
+	{
 		AxisAlignedBB bb = INFINITE_EXTENT_AABB;
 		Block type = getBlockType();
-		if(type == WizardryBlocks.arcane_workbench){
-			bb = new AxisAlignedBB(pos, pos.add(1, 1, 1));
-		}else if(type != null){
-			AxisAlignedBB cbb = this.getWorld().getBlockState(pos).getBoundingBox(world, pos);
-			if(cbb != null){
+		if (type == Wizardry.arcaneWorkbench)
+		{
+			bb = AxisAlignedBB.getBoundingBox(xCoord, yCoord, zCoord, xCoord + 1, yCoord + 1, zCoord + 1);
+		}
+		else if (type != null)
+		{
+			AxisAlignedBB cbb = getBlockType().getCollisionBoundingBoxFromPool(worldObj, xCoord, yCoord, zCoord);
+			if (cbb != null)
+			{
 				bb = cbb;
 			}
 		}
 		return bb;
-	}
-
-	// What are all these for?
-
-	@Override
-	public int getField(int id){
-		return 0;
-	}
-
-	@Override
-	public void setField(int id, int value){
-
-	}
-
-	@Override
-	public int getFieldCount(){
-		return 0;
-	}
-
-	@Override
-	public void clear(){
-		for(int i = 0; i < getSizeInventory(); i++){
-			setInventorySlotContents(i, ItemStack.EMPTY);
-		}
-	}
-
-	@Override
-	public boolean isEmpty(){
-		for(int i = 0; i < getSizeInventory(); i++){
-			if(!getStackInSlot(i).isEmpty()){
-				return false;
-			}
-		}
-		return true;
 	}
 
 }

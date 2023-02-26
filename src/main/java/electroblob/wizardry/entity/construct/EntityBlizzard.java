@@ -1,83 +1,75 @@
 package electroblob.wizardry.entity.construct;
 
-import electroblob.wizardry.registry.Spells;
-import electroblob.wizardry.registry.WizardryPotions;
-import electroblob.wizardry.registry.WizardrySounds;
-import electroblob.wizardry.spell.Spell;
-import electroblob.wizardry.util.EntityUtils;
-import electroblob.wizardry.util.MagicDamage;
-import electroblob.wizardry.util.MagicDamage.DamageType;
-import electroblob.wizardry.util.ParticleBuilder;
-import electroblob.wizardry.util.ParticleBuilder.Type;
+import java.util.List;
+
+import electroblob.wizardry.EnumElement;
+import electroblob.wizardry.EnumParticleType;
+import electroblob.wizardry.MagicDamage;
+import electroblob.wizardry.Wizardry;
+import electroblob.wizardry.WizardryUtilities;
+import electroblob.wizardry.MagicDamage.DamageType;
+import net.minecraft.entity.EntityLiving;
 import net.minecraft.entity.EntityLivingBase;
+import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.potion.PotionEffect;
 import net.minecraft.util.DamageSource;
 import net.minecraft.world.World;
 
-import java.util.List;
+public class EntityBlizzard extends EntityMagicConstruct {
 
-public class EntityBlizzard extends EntityScaledConstruct {
-
-	public EntityBlizzard(World world){
-		super(world);
-		// TODO: Set the size properly and do whatever forcefield does to allow block and entity interaction inside it
-		// 		 (Probably need to do this for several others too)
-		setSize(Spells.blizzard.getProperty(Spell.EFFECT_RADIUS).floatValue() * 2, 3);
+	public EntityBlizzard(World par1World) {
+		super(par1World);
+		this.height = 1.0f;
+		this.width = 1.0f;
 	}
 
-	@Override
-	protected boolean shouldScaleHeight(){
-		return false;
+	public EntityBlizzard(World world, double x, double y, double z, EntityLivingBase caster, int lifetime, float damageMultiplier) {
+		super(world, x, y, z, caster, lifetime, damageMultiplier);
+		this.height = 1.0f;
+		this.width = 1.0f;
 	}
 
 	public void onUpdate(){
 
 		if(this.ticksExisted % 120 == 1){
-			this.playSound(WizardrySounds.ENTITY_BLIZZARD_AMBIENT, 1.0f, 1.0f);
+			this.playSound("wizardry:wind", 1.0f, 1.0f);
 		}
 
 		super.onUpdate();
 
-		// This is a good example of why you might define a spell base property without necessarily using it in the
-		// spell - in fact, blizzard doesn't even have a spell class (yet)
-		double radius = Spells.blizzard.getProperty(Spell.EFFECT_RADIUS).doubleValue() * sizeMultiplier;
+		if(!this.worldObj.isRemote){
 
-		if(!this.world.isRemote){
-
-			List<EntityLivingBase> targets = EntityUtils.getLivingWithinRadius(radius, this.posX, this.posY,
-					this.posZ, this.world);
+			List<EntityLivingBase> targets = WizardryUtilities.getEntitiesWithinRadius(3.0d, this.posX, this.posY, this.posZ, this.worldObj);
 
 			for(EntityLivingBase target : targets){
 
 				if(this.isValidTarget(target)){
+					
+					double velX = target.motionX;
+					double velY = target.motionY;
+					double velZ = target.motionZ;
 
 					if(this.getCaster() != null){
-						EntityUtils.attackEntityWithoutKnockback(target,
-								MagicDamage.causeIndirectMagicDamage(this, getCaster(), DamageType.FROST),
-								1 * damageMultiplier);
+						target.attackEntityFrom(MagicDamage.causeIndirectEntityMagicDamage(this, getCaster(), DamageType.FROST), 1*damageMultiplier);
 					}else{
-						EntityUtils.attackEntityWithoutKnockback(target, DamageSource.MAGIC,
-								1 * damageMultiplier);
+						target.attackEntityFrom(DamageSource.magic, 1*damageMultiplier);
 					}
-				}
 
+					// Removes knockback
+					target.motionX = velX;
+					target.motionY = velY;
+					target.motionZ = velZ;
+				}
+				
 				// All entities are slowed, even the caster (except those immune to frost effects)
 				if(!MagicDamage.isEntityImmune(DamageType.FROST, target))
-					target.addPotionEffect(new PotionEffect(WizardryPotions.frost, 20, 0));
+					target.addPotionEffect(new PotionEffect(Wizardry.frost.id, 20, 0, true));
 			}
-			
 		}else{
-			
-			for(int i=0; i<6; i++){
-				double speed = (rand.nextBoolean() ? 1 : -1) * (0.1 + 0.05 * rand.nextDouble());
-				ParticleBuilder.create(Type.SNOW).pos(this.posX, this.posY + rand.nextDouble() * height, this.posZ).vel(0, 0, 0)
-				.time(100).scale(2).spin(rand.nextDouble() * (radius - 0.5) + 0.5, speed).shaded(true).spawn(world);
-			}
-
-			for(int i=0; i<3; i++){
-				double speed = (rand.nextBoolean() ? 1 : -1) * (0.05 + 0.02 * rand.nextDouble());
-				ParticleBuilder.create(Type.CLOUD).pos(this.posX, this.posY + rand.nextDouble() * (height - 0.5), this.posZ)
-						.clr(0xffffff).shaded(true).spin(rand.nextDouble() * (radius - 1) + 0.5, speed).spawn(world);
+			for(int i=1; i<10; i++){
+				float brightness = 0.5f + (rand.nextFloat()/2);
+				Wizardry.proxy.spawnParticle(EnumParticleType.BLIZZARD, worldObj, this.posX, this.posY + rand.nextDouble()*3, this.posZ, 0, 0, 0, 100, brightness, brightness + 0.1f, 1.0f, false, rand.nextDouble() * 2.5d + 0.5d);
+				Wizardry.proxy.spawnParticle(EnumParticleType.BLIZZARD, worldObj, this.posX, this.posY + rand.nextDouble()*3, this.posZ, 0, 0, 0, 100, 1.0f, 1.0f, 1.0f, false, rand.nextDouble() * 2.5d + 0.5d);
 			}
 		}
 	}

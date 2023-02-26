@@ -1,63 +1,60 @@
 package electroblob.wizardry.entity.construct;
 
-import electroblob.wizardry.registry.Spells;
-import electroblob.wizardry.registry.WizardrySounds;
-import electroblob.wizardry.spell.Spell;
-import electroblob.wizardry.util.EntityUtils;
-import electroblob.wizardry.util.MagicDamage;
-import electroblob.wizardry.util.MagicDamage.DamageType;
+import java.util.List;
+
+import electroblob.wizardry.EnumElement;
+import electroblob.wizardry.MagicDamage;
+import electroblob.wizardry.WizardryUtilities;
+import electroblob.wizardry.MagicDamage.DamageType;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.util.DamageSource;
 import net.minecraft.world.World;
 
-import java.util.List;
-
-public class EntityFireRing extends EntityScaledConstruct {
-
-	public EntityFireRing(World world){
-		super(world);
-		setSize(Spells.ring_of_fire.getProperty(Spell.EFFECT_RADIUS).floatValue() * 2, 1);
+public class EntityFireRing extends EntityMagicConstruct {
+	
+	public EntityFireRing(World par1World) {
+		super(par1World);
+		this.height = 1.0f;
+		this.width = 5.0f;
 	}
-
-	@Override
-	protected boolean shouldScaleHeight(){
-		return false;
+	
+	public EntityFireRing(World world, double x, double y, double z, EntityLivingBase caster, int lifetime, float damageMultiplier) {
+		super(world, x, y, z, caster, lifetime, damageMultiplier);
+		this.height = 1.0f;
+		this.width = 5.0f;
 	}
-
+	
 	public void onUpdate(){
-
+		
 		if(this.ticksExisted % 40 == 1){
-			this.playSound(WizardrySounds.ENTITY_FIRE_RING_AMBIENT, 4.0f, 0.7f);
+			this.playSound("fire.fire", 4.0f, 0.7f);
 		}
-
+		
 		super.onUpdate();
-
-		if(this.ticksExisted % 5 == 0 && !this.world.isRemote){
-
-			List<EntityLivingBase> targets = EntityUtils.getLivingWithinRadius(width/2, this.posX, this.posY, this.posZ, this.world);
-
+		
+		if(!this.worldObj.isRemote){
+			
+			List<EntityLivingBase> targets = WizardryUtilities.getEntitiesWithinRadius(2.5d, this.posX, this.posY, this.posZ, this.worldObj);
+			
 			for(EntityLivingBase target : targets){
-
+				
 				if(this.isValidTarget(target)){
 
 					double velX = target.motionX;
 					double velY = target.motionY;
 					double velZ = target.motionZ;
-
+					
 					if(!MagicDamage.isEntityImmune(DamageType.FIRE, target)){
-
-						target.setFire(Spells.ring_of_fire.getProperty(Spell.BURN_DURATION).intValue());
-
-						float damage = Spells.ring_of_fire.getProperty(Spell.DAMAGE).floatValue() * damageMultiplier;
-
+						
+						target.setFire(10);
+						
 						if(this.getCaster() != null){
-							target.attackEntityFrom(MagicDamage.causeIndirectMagicDamage(this, getCaster(),
-									DamageType.FIRE), damage);
+							target.attackEntityFrom(MagicDamage.causeIndirectEntityMagicDamage(this, getCaster(), DamageType.FIRE), 1*damageMultiplier);
 						}else{
-							target.attackEntityFrom(DamageSource.MAGIC, damage);
+							target.attackEntityFrom(DamageSource.magic, 1*damageMultiplier);
 						}
 					}
-
+					
 					// Removes knockback
 					target.motionX = velX;
 					target.motionY = velY;

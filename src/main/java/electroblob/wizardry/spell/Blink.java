@@ -1,137 +1,174 @@
 package electroblob.wizardry.spell;
 
-import electroblob.wizardry.Wizardry;
-import electroblob.wizardry.item.ItemArtefact;
-import electroblob.wizardry.item.SpellActions;
-import electroblob.wizardry.registry.WizardryItems;
-import electroblob.wizardry.util.*;
-import net.minecraft.entity.Entity;
+import electroblob.wizardry.EnumElement;
+import electroblob.wizardry.EnumSpellType;
+import electroblob.wizardry.EnumTier;
+import electroblob.wizardry.WizardryUtilities;
+import electroblob.wizardry.entity.living.EntityWizard;
 import net.minecraft.entity.EntityLiving;
 import net.minecraft.entity.EntityLivingBase;
-import net.minecraft.entity.item.EntityBoat;
+import net.minecraft.entity.ai.EntityAIArrowAttack;
+import net.minecraft.entity.ai.EntityAITasks.EntityAITaskEntry;
 import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.util.EnumFacing;
-import net.minecraft.util.EnumHand;
-import net.minecraft.util.EnumParticleTypes;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.MathHelper;
-import net.minecraft.util.math.RayTraceResult;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.item.EnumAction;
+import net.minecraft.util.MathHelper;
+import net.minecraft.util.MovingObjectPosition;
+import net.minecraft.util.MovingObjectPosition.MovingObjectType;
 import net.minecraft.world.World;
 
 public class Blink extends Spell {
 
-	public Blink(){
-		super("blink", SpellActions.POINT, false);
-		addProperties(RANGE);
+	public Blink() {
+		super(EnumTier.APPRENTICE, 15, EnumElement.SORCERY, "blink", EnumSpellType.UTILITY, 25, EnumAction.none, false);
 	}
 
 	@Override
-	public boolean cast(World world, EntityPlayer caster, EnumHand hand, int ticksInUse, SpellModifiers modifiers){
-
-		boolean teleportMount = caster.isRiding() && ItemArtefact.isArtefactActive(caster, WizardryItems.charm_mount_teleporting);
-		boolean hitLiquids = teleportMount && caster.getRidingEntity() instanceof EntityBoat; // Boats teleport to the surface
-
-		double range = getProperty(RANGE).floatValue() * modifiers.get(WizardryItems.range_upgrade);
-
-		RayTraceResult rayTrace = RayTracer.standardBlockRayTrace(world, caster, range, hitLiquids, !hitLiquids,false);
-
+	public boolean cast(World world, EntityPlayer caster, int ticksInUse, float damageMultiplier, float rangeMultiplier, float durationMultiplier, float blastMultiplier) {
+		
+		MovingObjectPosition rayTrace = WizardryUtilities.rayTrace(25*rangeMultiplier, world, caster, false);
+		
 		// It's worth noting that on the client side, the cast() method only gets called if the server side
 		// cast method succeeded, so you need not check any conditions for spawning particles.
 		if(world.isRemote){
-			for(int i = 0; i < 10; i++){
-				double dx = caster.posX;
-				double dy = caster.posY + 2 * world.rand.nextFloat();
-				double dz = caster.posZ;
+			for(int i=0;i<10;i++){
+				double dx1 = caster.posX;
+				double dy1 = WizardryUtilities.getPlayerEyesPos(caster) - 1.5 + 2*world.rand.nextFloat();
+				double dz1 = caster.posZ;
 				// For portal particles, velocity is not velocity but the offset where they start, then drift to
 				// the actual position given.
-				world.spawnParticle(EnumParticleTypes.PORTAL, dx, dy, dz, world.rand.nextDouble() - 0.5,
-						world.rand.nextDouble() - 0.5, world.rand.nextDouble() - 0.5);
-			}
-
-			Wizardry.proxy.playBlinkEffect(caster);
-		}
-
-		if(rayTrace != null && rayTrace.typeOfHit == RayTraceResult.Type.BLOCK){
-
-			BlockPos pos = rayTrace.getBlockPos().offset(rayTrace.sideHit);
-			Entity toTeleport = teleportMount ? caster.getRidingEntity() : caster;
-
-			Vec3d vec = EntityUtils.findSpaceForTeleport(toTeleport, GeometryUtils.getFaceCentre(pos, EnumFacing.DOWN), teleportMount);
-
-			if(vec != null){
-				// Plays before and after so it is heard from both positions
-				this.playSound(world, caster, ticksInUse, -1, modifiers);
-
-				if(!teleportMount && caster.isRiding()) caster.dismountRidingEntity();
-				if(!world.isRemote) toTeleport.setPositionAndUpdate(vec.x, vec.y, vec.z);
-
-				this.playSound(world, caster, ticksInUse, -1, modifiers);
-				return true;
+				world.spawnParticle("portal", dx1, dy1, dz1, world.rand.nextDouble() - 0.5, world.rand.nextDouble() - 0.5, world.rand.nextDouble() - 0.5);
 			}
 		}
+		
+		if(rayTrace != null && rayTrace.typeOfHit == MovingObjectType.BLOCK){
+			
+			int blockHitX = rayTrace.blockX;
+			int blockHitY = rayTrace.blockY;
+			int blockHitZ = rayTrace.blockZ;
+			int blockHitSide = rayTrace.sideHit;
+			
+			// This means stuff like snow layers is ignored, meaning when on snow-covered ground the player does
+			// not teleport 1 block above the ground.
+			if(blockHitSide == 1 && !world.getBlock(blockHitX, blockHitY, blockHitZ).getMaterial().blocksMovement()){
+				blockHitY--;
+			}
+			
+			// The following prevents the player from teleporting into blocks and suffocating
+			switch(blockHitSide){
+			case -1:
+				return false;
+			case 0:
+				return false;
+			case 1:
+				if(world.getBlock(blockHitX, blockHitY + 1, blockHitZ).getMaterial().blocksMovement() || world.getBlock(blockHitX, blockHitY + 2, blockHitZ).getMaterial().blocksMovement()){
+					return false;
+				}
+				break;
+			case 2:
+				if(world.getBlock(blockHitX, blockHitY, blockHitZ - 1).getMaterial().blocksMovement() || world.getBlock(blockHitX, blockHitY + 1, blockHitZ - 1).getMaterial().blocksMovement()){
+					return false;
+				}
+				break;
+			case 3:
+				if(world.getBlock(blockHitX, blockHitY, blockHitZ + 1).getMaterial().blocksMovement() || world.getBlock(blockHitX, blockHitY + 1, blockHitZ + 1).getMaterial().blocksMovement()){
+					return false;
+				}
+				break;
+			case 4:
+				if(world.getBlock(blockHitX - 1, blockHitY, blockHitZ).getMaterial().blocksMovement() || world.getBlock(blockHitX - 1, blockHitY + 1, blockHitZ).getMaterial().blocksMovement()){
+					return false;
+				}
+				break;
+			case 5:
+				if(world.getBlock(blockHitX + 1, blockHitY, blockHitZ).getMaterial().blocksMovement() || world.getBlock(blockHitX + 1, blockHitY + 1, blockHitZ).getMaterial().blocksMovement()){
+					return false;
+				}
+				break;
+			}
 
+			// Plays before and after so it is heard from both positions
+			world.playSoundAtEntity(caster, "mob.endermen.portal", 1.0F, 1.0f);
+			
+			if(!world.isRemote){
+				switch(blockHitSide){
+				case 1:
+					caster.setPositionAndUpdate(blockHitX + 0.5, blockHitY + 1, blockHitZ + 0.5);
+					break;
+				case 2:
+					caster.setPositionAndUpdate(blockHitX + 0.5, blockHitY, blockHitZ - 0.5);
+					break;
+				case 3:
+					caster.setPositionAndUpdate(blockHitX + 0.5, blockHitY, blockHitZ + 1.5);
+					break;
+				case 4:
+					caster.setPositionAndUpdate(blockHitX - 0.5, blockHitY, blockHitZ + 0.5);
+					break;
+				case 5:
+					caster.setPositionAndUpdate(blockHitX + 1.5, blockHitY, blockHitZ + 0.5);
+					break;
+				}
+			}
+			world.playSoundAtEntity(caster, "mob.endermen.portal", 1.0F, 1.0f);
+			caster.swingItem();
+			return true;
+		}
+		
 		return false;
 	}
 
 	@Override
-	public boolean cast(World world, EntityLiving caster, EnumHand hand, int ticksInUse, EntityLivingBase target,
-			SpellModifiers modifiers){
+	public boolean cast(World world, EntityLiving caster, EntityLivingBase target, float damageMultiplier, float rangeMultiplier, float durationMultiplier, float blastMultiplier){
 
-		float angle = (float)(Math.atan2(target.posZ - caster.posZ, target.posX - caster.posX)
-				+ world.rand.nextDouble() * Math.PI);
-		double radius = caster.getDistance(target.posX, target.posY, target.posZ)
-				+ world.rand.nextDouble() * 3.0d;
-
-		int x = MathHelper.floor(target.posX + MathHelper.sin(angle) * radius);
-		int z = MathHelper.floor(target.posZ - MathHelper.cos(angle) * radius);
-		Integer y = BlockUtils.getNearestFloor(world, new BlockPos(caster), (int)radius);
-
+		double angle = Math.atan2(target.posZ - caster.posZ, target.posX - caster.posX) + world.rand.nextDouble()*Math.PI;
+		double radius = caster.getDistance(target.posX, target.boundingBox.minY, target.posZ) + world.rand.nextDouble()*3.0d;
+		
+		int x = MathHelper.floor_double(target.posX + Math.sin(angle)*radius);
+		int z = MathHelper.floor_double(target.posZ - Math.cos(angle)*radius);
+		int y = WizardryUtilities.getNearestFloorLevel(world, x, (int)caster.boundingBox.minY, z, (int)radius);
+		
 		// It's worth noting that on the client side, the cast() method only gets called if the server side
 		// cast method succeeded, so you need not check any conditions for spawning particles.
-
+		
 		// For some reason, the wizard version spwans the particles where the wizard started
 		if(world.isRemote){
-			for(int i = 0; i < 10; i++){
+			for(int i=0;i<10;i++){
 				double dx1 = caster.posX;
-				double dy1 = caster.posY + caster.height * world.rand.nextFloat();
+				double dy1 = caster.boundingBox.minY + caster.height*world.rand.nextFloat();
 				double dz1 = caster.posZ;
-				world.spawnParticle(EnumParticleTypes.PORTAL, dx1, dy1, dz1, world.rand.nextDouble() - 0.5,
-						world.rand.nextDouble() - 0.5, world.rand.nextDouble() - 0.5);
+				world.spawnParticle("portal", dx1, dy1, dz1, world.rand.nextDouble() - 0.5, world.rand.nextDouble() - 0.5, world.rand.nextDouble() - 0.5);
 			}
 		}
-
-		if(y != null){
-
+		
+		if(y > -1){
+			
 			// This means stuff like snow layers is ignored, meaning when on snow-covered ground the caster does
 			// not teleport 1 block above the ground.
-			if(!world.getBlockState(new BlockPos(x, y, z)).getMaterial().blocksMovement()){
+			if(!world.getBlock(x, y, z).getMaterial().blocksMovement()){
 				y--;
 			}
-
-			if(world.getBlockState(new BlockPos(x, y + 1, z)).getMaterial().blocksMovement()
-					|| world.getBlockState(new BlockPos(x, y + 2, z)).getMaterial().blocksMovement()){
+			
+			if(world.getBlock(x, y + 1, z).getMaterial().blocksMovement() || world.getBlock(x, y + 2, z).getMaterial().blocksMovement()){
 				return false;
 			}
 
 			// Plays before and after so it is heard from both positions
-			this.playSound(world, caster, ticksInUse, -1, modifiers);
-
+			world.playSoundAtEntity(caster, "mob.endermen.portal", 1.0F, 1.0f);
+			
 			if(!world.isRemote){
 				caster.setPositionAndUpdate(x + 0.5, y + 1, z + 0.5);
 			}
-
-			this.playSound(world, caster, ticksInUse, -1, modifiers);
-			caster.swingArm(hand);
+			
+			world.playSoundAtEntity(caster, "mob.endermen.portal", 1.0F, 1.0f);
+			caster.swingItem();
 			return true;
 		}
-
+		
 		return false;
 	}
-
+	
 	@Override
-	public boolean canBeCastBy(EntityLiving npc, boolean override){
+	public boolean canBeCastByNPCs() {
 		return true;
 	}
-
+	
 }

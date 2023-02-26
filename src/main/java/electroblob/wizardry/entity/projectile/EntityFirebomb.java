@@ -1,90 +1,114 @@
 package electroblob.wizardry.entity.projectile;
 
-import electroblob.wizardry.registry.Spells;
-import electroblob.wizardry.registry.WizardrySounds;
-import electroblob.wizardry.spell.Spell;
-import electroblob.wizardry.util.EntityUtils;
-import electroblob.wizardry.util.MagicDamage;
-import electroblob.wizardry.util.MagicDamage.DamageType;
-import electroblob.wizardry.util.ParticleBuilder;
-import electroblob.wizardry.util.ParticleBuilder.Type;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.EntityLivingBase;
-import net.minecraft.util.EnumParticleTypes;
-import net.minecraft.util.math.RayTraceResult;
-import net.minecraft.world.World;
-
 import java.util.List;
 
-public class EntityFirebomb extends EntityBomb {
+import cpw.mods.fml.common.registry.IEntityAdditionalSpawnData;
+import electroblob.wizardry.EnumParticleType;
+import electroblob.wizardry.MagicDamage;
+import electroblob.wizardry.Wizardry;
+import electroblob.wizardry.WizardryUtilities;
+import electroblob.wizardry.MagicDamage.DamageType;
+import io.netty.buffer.ByteBuf;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.EntityLivingBase;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.util.DamageSource;
+import net.minecraft.util.MovingObjectPosition;
+import net.minecraft.world.World;
 
-	public EntityFirebomb(World world){
-		super(world);
-	}
+public class EntityFirebomb extends EntityMagicProjectile implements IEntityAdditionalSpawnData
+{
+	/** The entity blast multiplier. Only some projectiles cause a blast, which is why this isn't in EntityMagicProjectile. */
+	public float blastMultiplier = 1.0f;
+	
+    public EntityFirebomb(World par1World)
+    {
+        super(par1World);
+    }
 
-	@Override
-	public int getLifetime(){
-		return -1;
-	}
+    public EntityFirebomb(World par1World, EntityLivingBase par2EntityLivingBase)
+    {
+        super(par1World, par2EntityLivingBase);
+    }
+    
+    public EntityFirebomb(World par1World, EntityLivingBase par2EntityLivingBase, float damageMultiplier, float blastMultiplier)
+    {
+        super(par1World, par2EntityLivingBase, damageMultiplier);
+        this.blastMultiplier = blastMultiplier;
+    }
 
-	@Override
-	protected void onImpact(RayTraceResult rayTrace){
-		
-		Entity entityHit = rayTrace.entityHit;
+    public EntityFirebomb(World par1World, double par2, double par4, double par6)
+    {
+        super(par1World, par2, par4, par6);
+    }
 
-		if(entityHit != null){
-			// This is if the firebomb gets a direct hit
-			float damage = Spells.firebomb.getProperty(Spell.DIRECT_DAMAGE).floatValue() * damageMultiplier;
+    /**
+     * Called when this EntityThrowable hits a block or entity.
+     */
+    protected void onImpact(MovingObjectPosition par1MovingObjectPosition)
+    {
+    	Entity entityHit = par1MovingObjectPosition.entityHit;
+    	
+        if (entityHit != null)
+        {
+        	// This is if the firebomb gets a direct hit
+            float damage = 5 * damageMultiplier;
+            
+            entityHit.attackEntityFrom(MagicDamage.causeIndirectEntityMagicDamage(this, this.getThrower(), DamageType.FIRE).setProjectile(), damage);
+            
+            if(!MagicDamage.isEntityImmune(DamageType.FIRE, entityHit)) entityHit.setFire(10);
+        }
 
-			entityHit.attackEntityFrom(
-					MagicDamage.causeIndirectMagicDamage(this, this.getThrower(), DamageType.FIRE).setProjectile(),
-					damage);
-
-			if(!MagicDamage.isEntityImmune(DamageType.FIRE, entityHit))
-				entityHit.setFire(Spells.firebomb.getProperty(Spell.BURN_DURATION).intValue());
-		}
-
-		// Particle effect
-		if(world.isRemote){
-			
-			ParticleBuilder.create(Type.FLASH).pos(this.getPositionVector()).scale(5 * blastMultiplier).clr(1, 0.6f, 0)
-			.spawn(world);
-
-			for(int i = 0; i < 60 * blastMultiplier; i++){
-				
-				ParticleBuilder.create(Type.MAGIC_FIRE, rand, posX, posY, posZ, 2*blastMultiplier, false)
-				.time(10 + rand.nextInt(4)).scale(2 + rand.nextFloat()).spawn(world);
-				
-				ParticleBuilder.create(Type.DARK_MAGIC, rand, posX, posY, posZ, 2*blastMultiplier, false)
-				.clr(1.0f, 0.2f + rand.nextFloat() * 0.4f, 0.0f).spawn(world);
+        // Particle effect
+        if(worldObj.isRemote){
+    		this.worldObj.spawnParticle("largeexplode", this.posX, this.posY, this.posZ, 0, 0, 0);
+			for(int i=0;i<60*blastMultiplier;i++){
+				//this.worldObj.spawnParticle("flame", this.posX + (this.rand.nextDouble()*4 - 2)*blastMultiplier, this.posY + (this.rand.nextDouble()*4 - 2)*blastMultiplier, this.posZ + (this.rand.nextDouble()*4 - 2)*blastMultiplier, 0, 0, 0);
+				Wizardry.proxy.spawnParticle(EnumParticleType.MAGIC_FIRE, worldObj, this.posX + (this.rand.nextDouble()*4 - 2)*blastMultiplier, this.posY + (this.rand.nextDouble()*4 - 2)*blastMultiplier, this.posZ + (this.rand.nextDouble()*4 - 2)*blastMultiplier, 0, 0, 0, 15 + rand.nextInt(5), 2 + rand.nextFloat(), 0, 0);
+				Wizardry.proxy.spawnParticle(EnumParticleType.DARK_MAGIC, worldObj, this.posX + (this.rand.nextDouble()*4 - 2)*blastMultiplier, this.posY + (this.rand.nextDouble()*4 - 2)*blastMultiplier, this.posZ + (this.rand.nextDouble()*4 - 2)*blastMultiplier, 0.0d, 0.0d, 0.0d, 0, 1.0f, 0.2f + rand.nextFloat()*0.4f, 0.0f);
 			}
+        }
 
-			this.world.spawnParticle(EnumParticleTypes.EXPLOSION_LARGE, this.posX, this.posY, this.posZ, 0, 0, 0);
-		}
-
-		if(!this.world.isRemote){
-
-			this.playSound(WizardrySounds.ENTITY_FIREBOMB_SMASH, 1.5F, rand.nextFloat() * 0.4F + 0.6F);
-			this.playSound(WizardrySounds.ENTITY_FIREBOMB_FIRE, 1, 1);
-
-			double range = Spells.firebomb.getProperty(Spell.BLAST_RADIUS).floatValue() * blastMultiplier;
-
-			List<EntityLivingBase> targets = EntityUtils.getLivingWithinRadius(range, this.posX, this.posY,
-					this.posZ, this.world);
-
+        if(!this.worldObj.isRemote){
+        	
+	    	this.worldObj.playSoundEffect(this.posX, this.posY, this.posZ, "game.potion.smash", 1.5F, rand.nextFloat() * 0.4F + 0.6F);
+			if(!worldObj.isRemote) worldObj.playAuxSFX(1009, (int)this.posX, (int)this.posY, (int)this.posZ, 0);
+	
+	        double range = 3.0d*blastMultiplier;
+			
+			List<EntityLivingBase> targets = WizardryUtilities.getEntitiesWithinRadius(range, this.posX, this.posY, this.posZ, this.worldObj);
+			
 			for(EntityLivingBase target : targets){
-				if(target != entityHit && target != this.getThrower()
-						&& !MagicDamage.isEntityImmune(DamageType.FIRE, target)){
+				if(target != entityHit && target != this.getThrower() && !MagicDamage.isEntityImmune(DamageType.FIRE, target)){
 					// Splash damage does not count as projectile damage
-					target.attackEntityFrom(
-							MagicDamage.causeIndirectMagicDamage(this, this.getThrower(), DamageType.FIRE),
-							Spells.firebomb.getProperty(Spell.SPLASH_DAMAGE).floatValue() * damageMultiplier);
-					target.setFire(Spells.firebomb.getProperty(Spell.BURN_DURATION).intValue());
+					target.attackEntityFrom(MagicDamage.causeIndirectEntityMagicDamage(this, this.getThrower(), DamageType.FIRE), 4.0f * damageMultiplier);
+					target.setFire(7);
 				}
 			}
+			
+            this.setDead();
+        }
+    }
 
-			this.setDead();
-		}
+	@Override
+	public void writeSpawnData(ByteBuf buffer) {
+		buffer.writeFloat(blastMultiplier);
 	}
 
+	@Override
+	public void readSpawnData(ByteBuf buffer) {
+		blastMultiplier = buffer.readFloat();
+	}
+
+	@Override
+	public void readEntityFromNBT(NBTTagCompound nbttagcompound){
+    	super.readEntityFromNBT(nbttagcompound);
+        blastMultiplier = nbttagcompound.getFloat("blastMultiplier");
+	}
+
+	@Override
+	public void writeEntityToNBT(NBTTagCompound nbttagcompound){
+		super.writeEntityToNBT(nbttagcompound);
+		nbttagcompound.setFloat("blastMultiplier", blastMultiplier);
+	}
 }

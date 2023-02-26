@@ -1,43 +1,37 @@
 package electroblob.wizardry.item;
 
+import electroblob.wizardry.Wizardry;
 import electroblob.wizardry.entity.projectile.EntityFirebomb;
-import electroblob.wizardry.registry.WizardrySounds;
-import electroblob.wizardry.registry.WizardryTabs;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
-import net.minecraft.util.ActionResult;
-import net.minecraft.util.EnumActionResult;
-import net.minecraft.util.EnumHand;
 import net.minecraft.world.World;
 
 public class ItemFirebomb extends Item {
 
-	public ItemFirebomb(){
-		setMaxStackSize(16);
-		setCreativeTab(WizardryTabs.WIZARDRY);
-	}
+    public ItemFirebomb()
+    {
+        this.maxStackSize = 16;
+        this.setCreativeTab(Wizardry.tabWizardry);
+    }
 
-	@Override
-	public ActionResult<ItemStack> onItemRightClick(World world, EntityPlayer player, EnumHand hand){
+    /**
+     * Called whenever this item is equipped and the right mouse button is pressed. Args: itemStack, world, entityPlayer
+     */
+    public ItemStack onItemRightClick(ItemStack stack, World world, EntityPlayer entityplayer)
+    {
+        if (!entityplayer.capabilities.isCreativeMode)
+        {
+            --stack.stackSize;
+        }
 
-		ItemStack stack = player.getHeldItem(hand);
+        world.playSoundAtEntity(entityplayer, "random.bow", 0.5F, 0.4F / (itemRand.nextFloat() * 0.4F + 0.8F));
 
-		if(!player.isCreative()){
-			stack.shrink(1);
-		}
+        if (!world.isRemote)
+        {
+            world.spawnEntityInWorld(new EntityFirebomb(world, entityplayer));
+        }
 
-		player.playSound(WizardrySounds.ENTITY_FIREBOMB_THROW, 0.5F, 0.4F / (itemRand.nextFloat() * 0.4F + 0.8F));
-
-		player.getCooldownTracker().setCooldown(this, 20);
-
-		if(!world.isRemote){
-			EntityFirebomb firebomb = new EntityFirebomb(world);
-			firebomb.aim(player, 1);
-			world.spawnEntity(firebomb);
-		}
-
-		return ActionResult.newResult(EnumActionResult.SUCCESS, stack);
-	}
-	
+        return stack;
+    }
 }

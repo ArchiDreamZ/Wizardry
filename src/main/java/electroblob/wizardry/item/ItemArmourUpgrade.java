@@ -1,40 +1,45 @@
 package electroblob.wizardry.item;
 
+import java.util.List;
+
+import electroblob.wizardry.EnumTier;
 import electroblob.wizardry.Wizardry;
-import electroblob.wizardry.registry.WizardryTabs;
+import net.minecraft.creativetab.CreativeTabs;
+import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.EnumRarity;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
-import net.minecraft.world.World;
-import net.minecraftforge.fml.relauncher.Side;
-import net.minecraftforge.fml.relauncher.SideOnly;
+import net.minecraft.util.StatCollector;
 
-import javax.annotation.Nullable;
-import java.util.List;
-
-public class ItemArmourUpgrade extends Item {
-
-	public ItemArmourUpgrade(){
+public class ItemArmourUpgrade extends Item{
+	
+	public ItemArmourUpgrade() {
 		super();
-		setMaxStackSize(1);
-		setCreativeTab(WizardryTabs.WIZARDRY);
+		this.setMaxStackSize(1);
+		this.setCreativeTab(Wizardry.tabWizardry);
+		this.setTextureName("wizardry:armour_upgrade");
 	}
-
+	
+	/**
+     * Return an item rarity from EnumRarity
+     */
 	@Override
-	public EnumRarity getRarity(ItemStack stack){
-		return EnumRarity.EPIC;
-	}
-
+	public EnumRarity getRarity(ItemStack par1ItemStack)
+    {
+        return EnumRarity.epic;
+    }
+	
 	@Override
-	@SideOnly(Side.CLIENT)
-	public boolean hasEffect(ItemStack stack){
+	public boolean hasEffect(ItemStack stack, int par2){
 		return true;
 	}
-
+	
 	@Override
-	@SideOnly(Side.CLIENT)
-	public void addInformation(ItemStack stack, @Nullable World worldIn, List<String> tooltip, net.minecraft.client.util.ITooltipFlag flagIn) {
-		Wizardry.proxy.addMultiLineDescription(tooltip, "item." + this.getRegistryName() + ".desc");
+	public void addInformation(ItemStack par1ItemStack, EntityPlayer par2EntityPlayer, List par3List, boolean par4){
+		par3List.add(StatCollector.translateToLocalFormatted("item.armourUpgrade.desc1", "\u00A77"));
+		par3List.add(StatCollector.translateToLocalFormatted("item.armourUpgrade.desc2", "\u00A77", "\u00A7d"));
+		//par3List.add("\u00A77Upgrades any wizard armour");
+		//par3List.add("\u00A77to make it \u00A7dlegendary");
 	}
 
 }

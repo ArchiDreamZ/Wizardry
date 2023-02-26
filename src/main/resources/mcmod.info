@@ -1,15 +1,18 @@
 [
 {
-  "modid" : "ebwizardry",
+  "modid" : "wizardry",
   "name" : "Electroblob's Wizardry",
-  "version" : "4.3.7",
-  "mcversion" : "1.12.2",
+  "version" : "1.1.5",
   "url" : "https://minecraft.curseforge.com/projects/electroblobs-wizardry",
-  "credits" : "\nDesigned, coded and textured by Electroblob.\nDiscord Moderators: FavouriteDragon, WinDanesz\nCode contributed by: Corail31, 12foo, Shadows-of-Fire, Tora-B, Avatair, Aeronica, UltraHex, Azim-Palmer, raoulvdberge, rafasoares, xinyuan-liu, SettingDust, Aralu115.\nTranslators: Alsentar (Spanish), MadWrist (Mexican Spanish), VilagVil, kellixon, bigenergy, MugGod2 & DrHesperus (Russian), Hahdrim & Crowller (French), lorrampi (Brazilian Portuguese), ZHENGLOC, dragon-evol, Hokorizero, TUsama & Determancer (Chinese - Simplified), shejery, rewi_wire, 방통 & red1854th (Korean), Trozuu & Olej (Polish), BirdyDragon & Lemopav (German), chesterccj305 (Chinese - Traditional), Bombadil (Hungarian).\nSound Effects: OhhWowProductions, fredzed, deleted_user_3277771, DiscoveryME, OGSoundFX, leosalom, juskiddink",
-  "authorList" : [
+  "credits" : "Made by Electroblob",
+  "authors" : [
     "Electroblob"
   ],
   "description" : "Electroblob's Wizardry adds an rpg-style system of magic spells to Minecraft with the aim of being as playable as possible. No crazy constructs, no perk trees, no complex recipes - simply find spell books, cast spells, and master the arcane!",
-  "logoFile" : "assets/ebwizardry/textures/gui/logo.png"
+  "logoFile" : "assets/wizardry/textures/gui/logo.png",
+  "updateUrl" : "",
+  "parent" : "",
+  "screenshots": [
+  ]
 }
 ]

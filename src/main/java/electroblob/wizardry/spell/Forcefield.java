@@ -1,21 +1,65 @@
 package electroblob.wizardry.spell;
 
+import electroblob.wizardry.EnumElement;
+import electroblob.wizardry.EnumSpellType;
+import electroblob.wizardry.EnumTier;
 import electroblob.wizardry.entity.construct.EntityForcefield;
-import electroblob.wizardry.item.SpellActions;
-import electroblob.wizardry.registry.WizardryItems;
-import electroblob.wizardry.util.SpellModifiers;
+import electroblob.wizardry.entity.projectile.EntityMagicMissile;
+import net.minecraft.entity.EntityLiving;
 import net.minecraft.entity.EntityLivingBase;
-import net.minecraft.util.EnumFacing;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.item.EnumAction;
+import net.minecraft.world.World;
 
-public class Forcefield extends SpellConstruct<EntityForcefield> {
+public class Forcefield extends Spell {
 
-	public Forcefield(){
-		super("forcefield", SpellActions.THRUST, EntityForcefield::new, false);
-		addProperties(Spell.EFFECT_RADIUS);
+	public Forcefield() {
+		super(EnumTier.ADVANCED, 45, EnumElement.HEALING, "forcefield", EnumSpellType.DEFENCE, 200, EnumAction.bow, false);
 	}
 
 	@Override
-	protected void addConstructExtras(EntityForcefield construct, EnumFacing side, EntityLivingBase caster, SpellModifiers modifiers){
-		construct.setRadius(getProperty(EFFECT_RADIUS).floatValue() * modifiers.get(WizardryItems.blast_upgrade));
+	public boolean doesSpellRequirePacket(){
+		return false;
 	}
+
+	@Override
+	public boolean cast(World world, EntityPlayer caster, int ticksInUse, float damageMultiplier, float rangeMultiplier, float durationMultiplier, float blastMultiplier) {
+		
+		if(caster.onGround){
+			if(!world.isRemote){
+				EntityForcefield forcefield = new EntityForcefield(world, caster.posX, caster.posY, caster.posZ, caster, (int)(600*durationMultiplier));
+				world.spawnEntityInWorld(forcefield);
+			}
+			world.playSoundAtEntity(caster, "wizardry:largeaura", 1.0f, 1.0f);
+			return true;
+		}
+		
+		return false;
+	}
+
+	@Override
+	public boolean cast(World world, EntityLiving caster, EntityLivingBase target, float damageMultiplier, float rangeMultiplier, float durationMultiplier, float blastMultiplier){
+		
+		if(target != null){
+			// Wizards can no longer cast forcefield when they are inside one
+			if(caster.onGround && world.getEntitiesWithinAABB(EntityForcefield.class, caster.boundingBox).isEmpty()){
+				if(!world.isRemote){
+					EntityForcefield forcefield = new EntityForcefield(world, caster.posX, caster.posY, caster.posZ, caster, (int)(600*durationMultiplier));
+					world.spawnEntityInWorld(forcefield);
+				}
+				world.playSoundAtEntity(caster, "wizardry:largeaura", 1.0f, 1.0f);
+				return true;
+			}
+			
+			return false;
+		}
+		
+		return false;
+	}
+	
+	@Override
+	public boolean canBeCastByNPCs(){
+		return true;
+	}
+	
 }

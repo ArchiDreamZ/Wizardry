@@ -1,28 +1,70 @@
 package electroblob.wizardry.spell;
 
-import electroblob.wizardry.entity.living.EntityHuskMinion;
+import electroblob.wizardry.EnumElement;
+import electroblob.wizardry.EnumSpellType;
+import electroblob.wizardry.EnumTier;
+import electroblob.wizardry.Wizardry;
+import electroblob.wizardry.WizardryUtilities;
 import electroblob.wizardry.entity.living.EntityZombieMinion;
-import electroblob.wizardry.item.ItemArtefact;
-import electroblob.wizardry.registry.WizardryItems;
-import electroblob.wizardry.util.SpellModifiers;
+import net.minecraft.entity.EntityLiving;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.item.EnumAction;
+import net.minecraft.util.StatCollector;
 import net.minecraft.world.World;
 
-public class SummonZombie extends SpellMinion<EntityZombieMinion> {
+public class SummonZombie extends Spell {
 
-	public SummonZombie(){
-		super("summon_zombie", EntityZombieMinion::new);
-		this.soundValues(7, 0.6f, 0);
+	public SummonZombie() {
+		super(EnumTier.BASIC, 10, EnumElement.NECROMANCY, "summon_zombie", EnumSpellType.MINION, 100, EnumAction.bow, false);
 	}
 
 	@Override
-	protected EntityZombieMinion createMinion(World world, EntityLivingBase caster, SpellModifiers modifiers){
-		if(caster instanceof EntityPlayer && ItemArtefact.isArtefactActive((EntityPlayer)caster, WizardryItems.charm_minion_variants)){
-			return new EntityHuskMinion(world);
-		}else{
-			return super.createMinion(world, caster, modifiers);
+	public boolean doesSpellRequirePacket(){
+		return false;
+	}
+
+	@Override
+	public boolean cast(World world, EntityPlayer caster, int ticksInUse, float damageMultiplier, float rangeMultiplier, float durationMultiplier, float blastMultiplier) {
+		
+		if(!world.isRemote){
+			double x = caster.posX + world.rand.nextDouble()*4 - 2;
+			double z = caster.posZ + world.rand.nextDouble()*4 - 2;
+			// Allows for height variation.
+			if(WizardryUtilities.getNearestFloorLevel(world, (int)x, (int)caster.posY, (int)z, 5) == -1){
+				return false;
+			}
+			double y = Math.max(caster.posY, WizardryUtilities.getNearestFloorLevel(world, (int)x, (int)caster.posY, (int)z, 5));
+			EntityZombieMinion zombie = new EntityZombieMinion(world, x, y, z, caster, (int)(600*durationMultiplier));
+			if(Wizardry.showSummonedCreatureNames) zombie.setCustomNameTag(StatCollector.translateToLocalFormatted("entity.wizardry.summonedcreature.nameplate", caster.getCommandSenderName(), zombie.getCommandSenderName()));
+			world.spawnEntityInWorld(zombie);
 		}
+		world.playSoundAtEntity(caster, "wizardry:darkaura", 7.0f, 0.6f);
+		return true;
+	}
+
+	@Override
+	public boolean cast(World world, EntityLiving caster, EntityLivingBase target, float damageMultiplier, float rangeMultiplier, float durationMultiplier, float blastMultiplier){
+		
+		if(!world.isRemote){
+			double x = caster.posX + world.rand.nextDouble()*4 - 2;
+			double z = caster.posZ + world.rand.nextDouble()*4 - 2;
+			// Allows for height variation.
+			if(WizardryUtilities.getNearestFloorLevel(world, (int)x, (int)caster.posY, (int)z, 5) == -1){
+				return false;
+			}
+			double y = Math.max(caster.posY, WizardryUtilities.getNearestFloorLevel(world, (int)x, (int)caster.posY, (int)z, 5));
+			EntityZombieMinion zombie = new EntityZombieMinion(world, x, y, z, caster, (int)(600*durationMultiplier));
+			if(Wizardry.showSummonedCreatureNames) zombie.setCustomNameTag(StatCollector.translateToLocalFormatted("entity.wizardry.summonedcreature.nameplate", caster.getCommandSenderName(), zombie.getCommandSenderName()));
+			world.spawnEntityInWorld(zombie);
+		}
+		world.playSoundAtEntity(caster, "wizardry:darkaura", 7.0f, 0.6f);
+		return true;
+	}
+
+	@Override
+	public boolean canBeCastByNPCs(){
+		return true;
 	}
 
 }

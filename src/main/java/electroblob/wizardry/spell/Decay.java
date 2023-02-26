@@ -1,47 +1,107 @@
 package electroblob.wizardry.spell;
 
+import electroblob.wizardry.EnumElement;
+import electroblob.wizardry.EnumParticleType;
+import electroblob.wizardry.EnumSpellType;
+import electroblob.wizardry.EnumTier;
+import electroblob.wizardry.Wizardry;
+import electroblob.wizardry.WizardryUtilities;
+import electroblob.wizardry.entity.EntityArc;
 import electroblob.wizardry.entity.construct.EntityDecay;
-import electroblob.wizardry.registry.WizardryItems;
-import electroblob.wizardry.util.BlockUtils;
-import electroblob.wizardry.util.SpellModifiers;
+import electroblob.wizardry.entity.living.EntitySkeletonMinion;
+import net.minecraft.entity.EntityLiving;
 import net.minecraft.entity.EntityLivingBase;
-import net.minecraft.util.EnumFacing;
-import net.minecraft.util.math.BlockPos;
+import net.minecraft.entity.monster.EntityCreeper;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.item.EnumAction;
+import net.minecraft.util.MathHelper;
+import net.minecraft.util.MovingObjectPosition;
+import net.minecraft.util.MovingObjectPosition.MovingObjectType;
 import net.minecraft.world.World;
 
-public class Decay extends SpellConstructRanged<EntityDecay> {
-
-	public static final String DECAY_PATCHES_SPAWNED = "decay_patches_spawned";
+public class Decay extends Spell {
 
 	public Decay(){
-		super("decay", EntityDecay::new, false);
-		this.soundValues(1, 1.1f, 0.1f);
-		this.floor(true);
-		this.overlap(true);
-		addProperties(DECAY_PATCHES_SPAWNED, EFFECT_DURATION);
+		super(EnumTier.ADVANCED, 50, EnumElement.NECROMANCY, "decay", EnumSpellType.ATTACK, 200, EnumAction.none, false);
 	}
 
 	@Override
-	protected boolean spawnConstruct(World world, double x, double y, double z, EnumFacing side, EntityLivingBase caster, SpellModifiers modifiers){
+	public boolean doesSpellRequirePacket(){
+		return false;
+	}
 
-		BlockPos origin = new BlockPos(x, y, z);
-
-		if(world.getBlockState(origin).isNormalCube()) return false;
+	@Override
+	public boolean cast(World world, EntityPlayer caster, int ticksInUse, float damageMultiplier, float rangeMultiplier, float durationMultiplier, float blastMultiplier) {
 		
-		super.spawnConstruct(world, x, y, z, side, caster, modifiers);
+		MovingObjectPosition rayTrace = WizardryUtilities.rayTrace(12*rangeMultiplier, world, caster, false);
+		
+		if(rayTrace != null && rayTrace.typeOfHit == MovingObjectType.BLOCK){
 
-		float decayCount = getProperty(DECAY_PATCHES_SPAWNED).floatValue();
-		int quantity = (int)(decayCount * modifiers.get(WizardryItems.blast_upgrade));
-		// If there are more decay patches, they need more space to spawn in
-		int horizontalRange = (int)(0.4 * decayCount * modifiers.get(WizardryItems.blast_upgrade));
-		int verticalRange = (int)(6 * modifiers.get(WizardryItems.blast_upgrade));
-
-		for(int i=0; i<quantity; i++){
-			BlockPos pos = BlockUtils.findNearbyFloorSpace(world, origin, horizontalRange, verticalRange, false);
-			if(pos == null) break;
-			super.spawnConstruct(world, pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5, side, caster, modifiers);
+			int x = rayTrace.blockX;
+			int y = rayTrace.blockY;
+			int z = rayTrace.blockZ;
+			
+			if(world.getBlock(x, y+1, z).isNormalCube()) return false;
+			
+			if(!world.isRemote){
+				
+				world.spawnEntityInWorld(new EntityDecay(world, x+0.5, y+1, z+0.5, caster));
+				
+				for(int i=0;i<5;i++){
+					double x1 = x + world.rand.nextDouble()*4 - 2;
+					double z1 = z + world.rand.nextDouble()*4 - 2;
+					// Allows for height variation.
+					if(world.getTopSolidOrLiquidBlock((int)x1, (int)z1) - y < 6){
+						double y1 = Math.max(y, world.getTopSolidOrLiquidBlock((int)x1, (int)z1));
+						world.spawnEntityInWorld(new EntityDecay(world, x1+0.5, y1, z1+0.5, caster));
+					}
+				}
+			}
+			
+			world.playSoundAtEntity(caster, "mob.wither.shoot", 1.0F, world.rand.nextFloat() * 0.2F + 1.0F);
+			caster.swingItem();
+			return true;
 		}
 		
+		return false;
+	}
+
+	@Override
+	public boolean cast(World world, EntityLiving caster, EntityLivingBase target, float damageMultiplier, float rangeMultiplier, float durationMultiplier, float blastMultiplier){
+		
+		if(target != null){
+			
+			int x = MathHelper.floor_double(target.posX);
+			int y = (int)(int)target.boundingBox.minY;
+			int z = MathHelper.floor_double(target.posZ);
+			
+			if(world.getBlock(x, y, z).isNormalCube()) return false;
+			
+			if(!world.isRemote){
+				
+				world.spawnEntityInWorld(new EntityDecay(world, x+0.5, y+1, z+0.5, caster));
+				
+				for(int i=0;i<5;i++){
+					double x1 = x + world.rand.nextDouble()*4 - 2;
+					double z1 = z + world.rand.nextDouble()*4 - 2;
+					// Allows for height variation.
+					if(world.getTopSolidOrLiquidBlock((int)x1, (int)z1) - y < 6){
+						double y1 = Math.max(y, world.getTopSolidOrLiquidBlock((int)x1, (int)z1));
+						world.spawnEntityInWorld(new EntityDecay(world, x1+0.5, y1, z1+0.5, caster));
+					}
+				}
+			}
+			
+			world.playSoundAtEntity(caster, "mob.wither.shoot", 1.0F, world.rand.nextFloat() * 0.2F + 1.0F);
+			caster.swingItem();
+			return true;
+		}
+		
+		return false;
+	}
+	
+	@Override
+	public boolean canBeCastByNPCs(){
 		return true;
 	}
 

@@ -1,80 +1,70 @@
 package electroblob.wizardry.spell;
 
-import electroblob.wizardry.Settings;
+import electroblob.wizardry.EnumElement;
+import electroblob.wizardry.EnumParticleType;
+import electroblob.wizardry.EnumSpellType;
+import electroblob.wizardry.EnumTier;
 import electroblob.wizardry.Wizardry;
-import electroblob.wizardry.item.SpellActions;
-import electroblob.wizardry.util.InventoryUtils;
-import electroblob.wizardry.util.SpellModifiers;
+import electroblob.wizardry.WizardryUtilities;
 import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.item.ItemArmor;
+import net.minecraft.item.EnumAction;
 import net.minecraft.item.ItemStack;
-import net.minecraft.item.ItemSword;
-import net.minecraft.item.ItemTool;
 import net.minecraft.item.crafting.FurnaceRecipes;
-import net.minecraft.util.EnumHand;
-import net.minecraft.util.EnumParticleTypes;
 import net.minecraft.world.World;
 
 public class PocketFurnace extends Spell {
 
-	public static final String ITEMS_SMELTED = "items_smelted";
-
-	public PocketFurnace(){
-		super("pocket_furnace", SpellActions.IMBUE, false);
-		addProperties(ITEMS_SMELTED);
-		soundValues(1, 0.75f, 0);
+	public PocketFurnace() {
+		super(EnumTier.APPRENTICE, 30, EnumElement.FIRE, "pocket_furnace", EnumSpellType.UTILITY, 40, EnumAction.bow, false);
 	}
 
 	@Override
-	public boolean cast(World world, EntityPlayer caster, EnumHand hand, int ticksInUse, SpellModifiers modifiers){
-
-		int usesLeft = (int)(getProperty(ITEMS_SMELTED).floatValue() * modifiers.get(SpellModifiers.POTENCY));
-
+	public boolean cast(World world, EntityPlayer caster, int ticksInUse, float damageMultiplier, float rangeMultiplier, float durationMultiplier, float blastMultiplier) {
+		
+		int usesLeft = 5;
+		
 		ItemStack stack, result;
-
-		for(int i = 0; i < caster.inventory.getSizeInventory() && usesLeft > 0; i++){
-
+		
+		for(int i=0; i<caster.inventory.getSizeInventory() && usesLeft > 0; i++){
+			
 			stack = caster.inventory.getStackInSlot(i);
+			
+			if(stack != null){
 
-			if(!stack.isEmpty() && !world.isRemote){
-
-				result = FurnaceRecipes.instance().getSmeltingResult(stack);
-
-				if(!result.isEmpty() && !(stack.getItem() instanceof ItemTool) && !(stack.getItem() instanceof ItemSword)
-						&& !(stack.getItem() instanceof ItemArmor)
-						&& !Settings.containsMetaItem(Wizardry.settings.pocketFurnaceItemBlacklist, stack)){
-
-					if(stack.getCount() <= usesLeft){
-						ItemStack stack2 = new ItemStack(result.getItem(), stack.getCount(), result.getItemDamage());
-						if(InventoryUtils.doesPlayerHaveItem(caster, result.getItem())){
+				result = FurnaceRecipes.smelting().getSmeltingResult(stack);
+				
+				if(result != null){
+					if(stack.stackSize <= usesLeft){
+						ItemStack stack2 = new ItemStack(result.getItem(), stack.stackSize, result.getItemDamage());
+						if(caster.inventory.hasItem(result.getItem())){
 							caster.inventory.addItemStackToInventory(stack2);
-							caster.inventory.setInventorySlotContents(i, ItemStack.EMPTY);
+							caster.inventory.setInventorySlotContents(i, null);
 						}else{
 							caster.inventory.setInventorySlotContents(i, stack2);
 						}
-						usesLeft -= stack.getCount();
+						usesLeft -= stack.stackSize;
 					}else{
 						caster.inventory.decrStackSize(i, usesLeft);
-						caster.inventory.addItemStackToInventory(
-								new ItemStack(result.getItem(), usesLeft, result.getItemDamage()));
+						caster.inventory.addItemStackToInventory(new ItemStack(result.getItem(), usesLeft, result.getItemDamage()));
 						usesLeft = 0;
 					}
 				}
 			}
 		}
-
-		this.playSound(world, caster, ticksInUse, -1, modifiers);
-
+		
+		caster.playSound("fire.fire", 1, 0.75f);
+		
 		if(world.isRemote){
-			for(int i = 0; i < 10; i++){
-				double x1 = (double)((float)caster.posX + world.rand.nextFloat() * 2 - 1.0F);
-				double y1 = (double)((float)caster.posY + caster.getEyeHeight() - 0.5F + world.rand.nextFloat());
-				double z1 = (double)((float)caster.posZ + world.rand.nextFloat() * 2 - 1.0F);
-				world.spawnParticle(EnumParticleTypes.FLAME, x1, y1, z1, 0, 0.01F, 0);
+			for(int i=0; i<10; i++){
+				double x1 = (double)((float)caster.posX + world.rand.nextFloat()*2 - 1.0F);
+				double y1 = (double)((float)WizardryUtilities.getPlayerEyesPos(caster) - 0.5F + world.rand.nextFloat());
+				double z1 = (double)((float)caster.posZ + world.rand.nextFloat()*2 - 1.0F);
+				world.spawnParticle("flame", x1, y1, z1, 0, 0.01F, 0);
 			}
 		}
-
+		
 		return usesLeft < 5;
 	}
+
 
 }

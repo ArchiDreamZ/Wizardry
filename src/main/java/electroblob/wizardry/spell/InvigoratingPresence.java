@@ -1,49 +1,51 @@
 package electroblob.wizardry.spell;
 
+import java.util.List;
+
+import electroblob.wizardry.EnumElement;
+import electroblob.wizardry.EnumParticleType;
+import electroblob.wizardry.EnumSpellType;
+import electroblob.wizardry.EnumTier;
 import electroblob.wizardry.Wizardry;
-import electroblob.wizardry.item.SpellActions;
-import electroblob.wizardry.registry.WizardryItems;
-import electroblob.wizardry.util.ParticleBuilder;
-import electroblob.wizardry.util.ParticleBuilder.Type;
-import electroblob.wizardry.util.SpellModifiers;
+import electroblob.wizardry.WizardryUtilities;
 import net.minecraft.entity.EntityLivingBase;
-import net.minecraft.init.MobEffects;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.item.EnumAction;
+import net.minecraft.potion.Potion;
 import net.minecraft.potion.PotionEffect;
-import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
 
-import javax.annotation.Nullable;
+public class InvigoratingPresence extends Spell {
 
-public class InvigoratingPresence extends SpellAreaEffect {
-
-	public InvigoratingPresence(){
-		super("invigorating_presence", SpellActions.POINT_UP, false);
-		this.soundValues(0.7f, 1.2f, 0.4f);
-		this.alwaysSucceed(true);
-		this.targetAllies(true);
-		addProperties(EFFECT_DURATION, EFFECT_STRENGTH);
+	public InvigoratingPresence() {
+		super(EnumTier.APPRENTICE, 30, EnumElement.HEALING, "invigorating_presence", EnumSpellType.UTILITY, 60, EnumAction.bow, false);
 	}
 
 	@Override
-	protected boolean affectEntity(World world, Vec3d origin, @Nullable EntityLivingBase caster, EntityLivingBase target, int targetCount, int ticksInUse, SpellModifiers modifiers){
+	public boolean cast(World world, EntityPlayer caster, int ticksInUse, float damageMultiplier, float rangeMultiplier, float durationMultiplier, float blastMultiplier) {
+		
+		List<EntityPlayer> targets = WizardryUtilities.getEntitiesWithinRadius(5*blastMultiplier, caster.posX, caster.posY, caster.posZ, world, EntityPlayer.class);
+		
+		for(EntityPlayer target : targets){
+			if(WizardryUtilities.isPlayerAlly(caster, target) || target == caster){
+				// Strength 2 for 45 seconds.
+				target.addPotionEffect(new PotionEffect(Potion.damageBoost.id, (int)(900*durationMultiplier), 1, true));
+			}
+		}
+		
+		if(world.isRemote){
+			for(int i=0;i<50*blastMultiplier;i++){
+        		double radius = (1 + world.rand.nextDouble()*4)*blastMultiplier;
+        		double angle = world.rand.nextDouble()*Math.PI*2;
+				Wizardry.proxy.spawnParticle(EnumParticleType.SPARKLE, world, caster.posX + radius*Math.cos(angle), WizardryUtilities.getEntityFeetPos(caster), caster.posZ + radius*Math.sin(angle),
+						0, 0.03, 0, 50, 1, 0.2f, 0.2f);
 
-		int bonusAmplifier = SpellBuff.getStandardBonusAmplifier(modifiers.get(SpellModifiers.POTENCY));
-
-		target.addPotionEffect(new PotionEffect(MobEffects.STRENGTH,
-				(int)(getProperty(EFFECT_DURATION).floatValue() * modifiers.get(WizardryItems.duration_upgrade)),
-				getProperty(EFFECT_STRENGTH).intValue() + bonusAmplifier));
-
+			}
+		}
+		
+		world.playSoundAtEntity(caster, "wizardry:aura", 1.0F, world.rand.nextFloat() * 0.2F + 1.0F);
 		return true;
 	}
 
-	@Override
-	protected void spawnParticle(World world, double x, double y, double z){
-		ParticleBuilder.create(Type.SPARKLE).pos(x, y, z).vel(0, 0.03, 0).time(50).clr(1, 0.2f, 0.2f).spawn(world);
-	}
-
-	@Override
-	protected String getTranslationKey(){
-		return Wizardry.tisTheSeason ? super.getTranslationKey() + "_festive" : super.getTranslationKey();
-	}
 
 }

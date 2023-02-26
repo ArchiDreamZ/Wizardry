@@ -1,82 +1,103 @@
 package electroblob.wizardry.spell;
 
+import electroblob.wizardry.EnumElement;
+import electroblob.wizardry.EnumSpellType;
+import electroblob.wizardry.EnumTier;
 import electroblob.wizardry.Wizardry;
-import electroblob.wizardry.item.SpellActions;
-import electroblob.wizardry.util.SpellModifiers;
-import net.minecraft.block.state.IBlockState;
+import electroblob.wizardry.WizardryUtilities;
+import net.minecraft.block.Block;
 import net.minecraft.entity.Entity;
+import net.minecraft.entity.EntityLiving;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.item.EntityItem;
 import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.item.ItemStack;
-import net.minecraft.util.EnumFacing;
-import net.minecraft.util.EnumHand;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.item.EnumAction;
+import net.minecraft.util.MovingObjectPosition;
+import net.minecraft.util.MovingObjectPosition.MovingObjectType;
 import net.minecraft.world.World;
 
-public class Telekinesis extends SpellRay {
+public class Telekinesis extends Spell {
 
-	public Telekinesis(){
-		super("telekinesis", SpellActions.POINT, false);
-		this.aimAssist(0.4f); // Helps with aiming at items
+	public Telekinesis() {
+		super(EnumTier.BASIC, 9999, EnumElement.SORCERY, "telekinesis", EnumSpellType.UTILITY, 5, EnumAction.none, false);
 	}
 
-	@Override public boolean requiresPacket(){ return false; }
+	@Override
+	public boolean doesSpellRequirePacket(){
+		return false;
+	}
 
 	@Override
-	protected boolean onEntityHit(World world, Entity target, Vec3d hit, EntityLivingBase caster, Vec3d origin, int ticksInUse, SpellModifiers modifiers){
-		
-		if(target instanceof EntityItem){
+	public boolean cast(World world, EntityPlayer caster, int ticksInUse, float damageMultiplier, float rangeMultiplier, float durationMultiplier, float blastMultiplier) {
 
-			target.motionX = (origin.x - target.posX) / 6;
-			target.motionY = (origin.y - target.posY) / 6;
-			target.motionZ = (origin.z - target.posZ) / 6;
-			return true;
+		MovingObjectPosition rayTrace = WizardryUtilities.standardEntityRayTrace(world, caster, 8*rangeMultiplier, 3.0f);
 
-		}else if(target instanceof EntityPlayer && (Wizardry.settings.telekineticDisarmament || !(caster instanceof EntityPlayer))){
+		if(rayTrace != null && rayTrace.entityHit != null){
 
-			EntityPlayer player = (EntityPlayer)target;
-			
-			// IDEA: Disarm the offhand if the mainhand is empty or otherwise harmless?
+			if(rayTrace.entityHit instanceof EntityItem){
 
-			if(!player.getHeldItemMainhand().isEmpty()){
+				Entity entityHit = rayTrace.entityHit;
+				entityHit.motionX = (caster.posX - entityHit.posX)/6;
+				entityHit.motionY = (caster.posY + caster.eyeHeight - entityHit.posY)/6;
+				entityHit.motionZ = (caster.posZ - entityHit.posZ)/6;
+				world.playSoundAtEntity(entityHit, "wizardry:aura", 1.0F, 1.0f);
+				caster.swingItem();
+				return true;
 
-				if(!world.isRemote){
-					EntityItem item = player.entityDropItem(player.getHeldItemMainhand(), 0);
-					// Makes the item move towards the caster
-					item.motionX = (origin.x - player.posX) / 20;
-					item.motionZ = (origin.z - player.posZ) / 20;
+			}else if(rayTrace.entityHit instanceof EntityPlayer && Wizardry.telekineticDisarmament){
+
+				EntityPlayer target = (EntityPlayer)rayTrace.entityHit;
+
+				if(target.getHeldItem() != null){
+
+					if(!world.isRemote){
+						EntityItem item = target.entityDropItem(target.getHeldItem(), 0.0f);
+						// Makes the item move towards the caster
+						item.motionX = (caster.posX - target.posX)/20;
+						item.motionZ = (caster.posZ - target.posZ)/20;
+					}
+					target.setCurrentItemOrArmor(0, null);
+
+					world.playSoundAtEntity(target, "wizardry:aura", 1.0F, 1.0f);
+					caster.swingItem();
+					return true;
 				}
-
-				player.setHeldItem(EnumHand.MAIN_HAND, ItemStack.EMPTY);
-				
+			}
+		}
+		if(rayTrace != null && rayTrace.typeOfHit == MovingObjectType.BLOCK){
+			Block block = world.getBlock(rayTrace.blockX, rayTrace.blockY, rayTrace.blockZ);
+			if(block.onBlockActivated(world, rayTrace.blockX, rayTrace.blockY, rayTrace.blockZ, caster, 0, 0, 0, 0)){
+				world.playSound(rayTrace.blockX, rayTrace.blockY, rayTrace.blockZ, "wizardry:aura", 1.0F, 1.0f, false);
+				caster.swingItem();
 				return true;
 			}
 		}
-		
+		return false;
+	}
+
+	public boolean cast(World world, EntityLiving caster, EntityLivingBase target, float damageMultiplier, float rangeMultiplier, float durationMultiplier, float blastMultiplier){
+
+		if(target instanceof EntityPlayer && target.getHeldItem() != null){
+
+			if(!world.isRemote){
+				EntityItem item = target.entityDropItem(target.getHeldItem(), 0.0f);
+				// Makes the item move towards the caster
+				item.motionX = (caster.posX - target.posX)/20;
+				item.motionZ = (caster.posZ - target.posZ)/20;
+			}
+			target.setCurrentItemOrArmor(0, null);
+
+			world.playSoundAtEntity(target, "wizardry:aura", 1.0F, 1.0f);
+			caster.swingItem();
+			return true;
+		}
+
 		return false;
 	}
 
 	@Override
-	protected boolean onBlockHit(World world, BlockPos pos, EnumFacing side, Vec3d hit, EntityLivingBase caster, Vec3d origin, int ticksInUse, SpellModifiers modifiers){
-		
-		if(caster instanceof EntityPlayer){
-			
-			IBlockState blockstate = world.getBlockState(pos);
-	
-			if(blockstate.getBlock().onBlockActivated(world, pos, blockstate, (EntityPlayer)caster, EnumHand.MAIN_HAND,
-					side, 0, 0, 0)){
-				return true;
-			}
-		}
-		
-		return false;
-	}
-
-	@Override
-	protected boolean onMiss(World world, EntityLivingBase caster, Vec3d origin, Vec3d direction, int ticksInUse, SpellModifiers modifiers){
-		return false;
+	public boolean canBeCastByNPCs(){
+		return true;
 	}
 
 }

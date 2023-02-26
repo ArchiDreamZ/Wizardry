@@ -1,195 +1,290 @@
 package electroblob.wizardry.entity.living;
 
+import electroblob.wizardry.EnumParticleType;
 import electroblob.wizardry.Wizardry;
-import electroblob.wizardry.util.EntityUtils;
-import electroblob.wizardry.util.ParticleBuilder;
-import electroblob.wizardry.util.ParticleBuilder.Type;
-import net.minecraft.entity.EntityFlying;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.EntityLiving;
 import net.minecraft.entity.EntityLivingBase;
+import net.minecraft.entity.EnumCreatureAttribute;
 import net.minecraft.entity.IEntityLivingData;
 import net.minecraft.entity.SharedMonsterAttributes;
+import net.minecraft.entity.ai.EntityAIAttackOnCollide;
 import net.minecraft.entity.ai.EntityAIHurtByTarget;
+import net.minecraft.entity.ai.EntityAILookIdle;
+import net.minecraft.entity.ai.EntityAIMoveTowardsRestriction;
 import net.minecraft.entity.ai.EntityAINearestAttackableTarget;
-import net.minecraft.entity.ai.attributes.AttributeModifier;
-import net.minecraft.entity.monster.EntityCaveSpider;
-import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.init.MobEffects;
-import net.minecraft.item.Item;
-import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.entity.ai.EntityAISwimming;
+import net.minecraft.entity.ai.EntityAIWander;
+import net.minecraft.entity.monster.EntityMob;
+import net.minecraft.entity.monster.IMob;
+import net.minecraft.potion.Potion;
 import net.minecraft.potion.PotionEffect;
-import net.minecraft.util.EnumHand;
-import net.minecraft.util.ResourceLocation;
-import net.minecraft.util.text.ITextComponent;
-import net.minecraft.util.text.TextComponentTranslation;
-import net.minecraft.world.DifficultyInstance;
-import net.minecraft.world.EnumDifficulty;
+import net.minecraft.util.MathHelper;
 import net.minecraft.world.World;
 
-import java.util.UUID;
+public class EntitySpiderMinion extends EntitySummonedCreature {
 
-public class EntitySpiderMinion extends EntityCaveSpider implements ISummonedCreature {
-
-	// Field implementations
-	private int lifetime = -1;
-	private UUID casterUUID;
-
-	// Setter + getter implementations
-	@Override public int getLifetime(){ return lifetime; }
-	@Override public void setLifetime(int lifetime){ this.lifetime = lifetime; }
-	@Override public UUID getOwnerId(){ return casterUUID; }
-	@Override public void setOwnerId(UUID uuid){ this.casterUUID = uuid; }
-
-	/** Creates a new spider minion in the given world. */
 	public EntitySpiderMinion(World world){
-		super(world);
-		this.experienceValue = 0;
+        super(world);
+    }
+	
+    public EntitySpiderMinion(World world, double x, double y, double z, EntityLivingBase caster, int lifetime){
+    	
+        super(world, x, y, z, caster, lifetime);
+        this.setSize(0.7F, 0.5F);
+        this.tasks.addTask(0, new EntityAISwimming(this));
+        this.tasks.addTask(1, new EntityAIAttackOnCollide(this, EntityLivingBase.class, 1.0D, true));
+        this.tasks.addTask(2, new EntityAIMoveTowardsRestriction(this, 1.0D));
+        this.tasks.addTask(3, new EntityAIWander(this, 1.0D));
+        this.tasks.addTask(4, new EntityAILookIdle(this));
+        this.targetTasks.addTask(1, new EntityAIHurtByTarget(this, true));
+        this.targetTasks.addTask(2, new EntityAINearestAttackableTarget(this, EntityLivingBase.class, 0, false, true, this.targetSelector));
+        this.experienceValue = 0;
+    }
+
+    /**
+     * Returns true if the newer Entity AI code should be run
+     */
+    protected boolean isAIEnabled()
+    {
+        return true;
+    }
+    
+    @Override
+	public boolean hasRangedAttack() {
+		return false;
 	}
+    
+    protected void entityInit()
+    {
+        super.entityInit();
+        this.dataWatcher.addObject(16, new Byte((byte)0));
+    }
 
-	// EntitySpider overrides
-
-	// This particular override is pretty standard: let the superclass handle basic AI like swimming, but replace its
-	// targeting system with one that targets hostile mobs and takes the AllyDesignationSystem into account.
-	@Override
-	protected void initEntityAI(){
-		super.initEntityAI();
-		this.targetTasks.taskEntries.clear();
-		// Spiders use a custom AI type specific to spiders which I can't access, but it's just an extension of
-		// EntityAINearestAttackableTarget which takes daylight into account. Since I want spider minions to attack
-		// regardless of daylight, I can just use EntityAINearestAttackableTarget.
-		this.targetTasks.addTask(1, new EntityAIHurtByTarget(this, false));
-		this.targetTasks.addTask(2, new EntityAINearestAttackableTarget<EntityLivingBase>(this, EntityLivingBase.class,
-				0, false, true, this.getTargetSelector()));
-	}
-
-	// No spider jockeys!
-	@Override
-	public IEntityLivingData onInitialSpawn(DifficultyInstance difficulty, IEntityLivingData livingdata){
-
-		// Can't call super, so the code from the next level up (EntityLiving) had to be copied as well.
-		this.getEntityAttribute(SharedMonsterAttributes.FOLLOW_RANGE)
-				.applyModifier(new AttributeModifier("Random spawn bonus", this.rand.nextGaussian() * 0.05D, EntityUtils.Operations.MULTIPLY_FLAT));
-
-		if(this.rand.nextFloat() < 0.05F){
-			this.setLeftHanded(true);
-		}else{
-			this.setLeftHanded(false);
-		}
-
-		// Don't need anything from EntitySpider, since neither spider jockeys nor group data is relevant.
-		return livingdata;
-	}
-
-	// Implementations
-
-	@Override
-	public void setRevengeTarget(EntityLivingBase entity){
-		if(this.shouldRevengeTarget(entity)) super.setRevengeTarget(entity);
-	}
-
-	@Override
-	public void onUpdate(){
-		super.onUpdate();
-		this.updateDelegate();
-	}
-
-	@Override
+    @Override
 	public void onSpawn(){
-		this.spawnParticleEffect();
+    	if(this.worldObj.isRemote){
+    		for(int i=0;i<15;i++){
+    			Wizardry.proxy.spawnParticle(EnumParticleType.DARK_MAGIC, worldObj, this.posX + this.rand.nextFloat(), this.posY + this.rand.nextFloat(), this.posZ + this.rand.nextFloat(), 0.0d, 0.0d, 0.0d, 0, 0.1f, 0.2f, 0.0f);
+    		}
+    	}
+    }
+
+    @Override
+	public void despawn(){
+    	if(this.worldObj.isRemote){
+    		for(int i=0;i<15;i++){
+    			Wizardry.proxy.spawnParticle(EnumParticleType.DARK_MAGIC, worldObj, this.posX + this.rand.nextFloat(), this.posY + this.rand.nextFloat(), this.posZ + this.rand.nextFloat(), 0.0d, 0.0d, 0.0d, 0, 0.1f, 0.2f, 0.0f);
+    		}
+    	}
+		super.despawn();
 	}
+    
+    /**
+     * Called to update the entity's position/logic.
+     */
+    public void onUpdate()
+    {
+    	// Adds subtle particle effect while alive
+    	if(this.worldObj.isRemote && rand.nextInt(8) == 0) Wizardry.proxy.spawnParticle(EnumParticleType.DARK_MAGIC, worldObj, this.posX, this.posY + rand.nextDouble()*1.5, this.posZ, 0.0d, 0.0d, 0.0d, 0, 0.1f, 0.0f, 0.0f);
+    	
+        super.onUpdate();
 
-	@Override
-	public void onDespawn(){
-		this.spawnParticleEffect();
-	}
+        if (!this.worldObj.isRemote)
+        {
+            this.setBesideClimbableBlock(this.isCollidedHorizontally);
+        }
+    }
 
-	private void spawnParticleEffect(){
-		if(this.world.isRemote){
-			for(int i = 0; i < 15; i++){
-				ParticleBuilder.create(Type.DARK_MAGIC)
-				.pos(this.posX + this.rand.nextFloat(), this.posY + this.rand.nextFloat(), this.posZ + this.rand.nextFloat())
-				.clr(0.1f, 0.2f, 0.0f)
-				.spawn(world);
-			}
-		}
-	}
+    protected void applyEntityAttributes()
+    {
+        super.applyEntityAttributes();
+        this.getEntityAttribute(SharedMonsterAttributes.maxHealth).setBaseValue(12.0D);
+        this.getEntityAttribute(SharedMonsterAttributes.movementSpeed).setBaseValue(0.3D);
+    }
 
-	@Override
-	public boolean hasParticleEffect(){
-		return true;
-	}
+    /**
+     * Finds the closest player within 16 blocks to attack, or null if this Entity isn't interested in attacking
+     * (Animals, Spiders at day, peaceful PigZombies).
+     */
+    protected Entity findPlayerToAttack()
+    {
+        float f = this.getBrightness(1.0F);
 
-	@Override
-	public void onSuccessfulAttack(EntityLivingBase target){
+        if (f < 0.5F)
+        {
+            double d0 = 16.0D;
+            return this.worldObj.getClosestVulnerablePlayerToEntity(this, d0);
+        }
+        else
+        {
+            return null;
+        }
+    }
 
-		int seconds = 0;
+    /**
+     * Returns the sound this mob makes while it's alive.
+     */
+    protected String getLivingSound()
+    {
+        return "mob.spider.say";
+    }
 
-		if(this.world.getDifficulty() == EnumDifficulty.NORMAL){
-			seconds = 7;
-		}else if(this.world.getDifficulty() == EnumDifficulty.HARD){
-			seconds = 15;
-		}
+    /**
+     * Returns the sound this mob makes when it is hurt.
+     */
+    protected String getHurtSound()
+    {
+        return "mob.spider.say";
+    }
 
-		if(seconds > 0){
-			target.addPotionEffect(new PotionEffect(MobEffects.POISON, seconds * 20, 0));
-		}
-	}
+    /**
+     * Returns the sound this mob makes on death.
+     */
+    protected String getDeathSound()
+    {
+        return "mob.spider.death";
+    }
 
-	@Override
-	protected boolean processInteract(EntityPlayer player, EnumHand hand){
-		// In this case, the delegate method determines whether super is called.
-		// Rather handily, we can make use of Java's short-circuiting method of evaluating OR statements.
-		return this.interactDelegate(player, hand) || super.processInteract(player, hand);
-	}
+    /**
+     * Plays step sound at given x, y, z for the entity
+     */
+    protected void playStepSound(int par1, int par2, int par3, int par4)
+    {
+        this.playSound("mob.spider.step", 0.15F, 1.0F);
+    }
 
-	@Override
-	public void writeEntityToNBT(NBTTagCompound nbttagcompound){
-		super.writeEntityToNBT(nbttagcompound);
-		this.writeNBTDelegate(nbttagcompound);
-	}
+    /**
+     * Basic mob attack. Default to touch of death in EntityCreature. Overridden by each mob to define their attack.
+     */
+    protected void attackEntity(Entity par1Entity, float par2)
+    {
+        float f1 = this.getBrightness(1.0F);
 
-	@Override
-	public void readEntityFromNBT(NBTTagCompound nbttagcompound){
-		super.readEntityFromNBT(nbttagcompound);
-		this.readNBTDelegate(nbttagcompound);
-	}
+        if (f1 > 0.5F && this.rand.nextInt(100) == 0)
+        {
+            this.entityToAttack = null;
+        }
+        else
+        {
+            if (par2 > 2.0F && par2 < 6.0F && this.rand.nextInt(10) == 0)
+            {
+                if (this.onGround)
+                {
+                    double d0 = par1Entity.posX - this.posX;
+                    double d1 = par1Entity.posZ - this.posZ;
+                    float f2 = MathHelper.sqrt_double(d0 * d0 + d1 * d1);
+                    this.motionX = d0 / (double)f2 * 0.5D * 0.800000011920929D + this.motionX * 0.20000000298023224D;
+                    this.motionZ = d1 / (double)f2 * 0.5D * 0.800000011920929D + this.motionZ * 0.20000000298023224D;
+                    this.motionY = 0.4000000059604645D;
+                }
+            }
+            else
+            {
+                super.attackEntity(par1Entity, par2);
+            }
+        }
+    }
 
-	// Recommended overrides
+    /**
+     * Returns the item ID for the item the mob drops on death.
+     */
+    protected int getDropItemId()
+    {
+        return -1;
+    }
 
-	@Override protected int getExperiencePoints(EntityPlayer player){ return 0; }
-	@Override protected boolean canDropLoot(){ return false; }
-	@Override protected Item getDropItem(){ return null; }
-	@Override protected ResourceLocation getLootTable(){ return null; }
-	@Override public boolean canPickUpLoot(){ return false; }
+    /**
+     * returns true if this entity is by a ladder, false otherwise
+     */
+    public boolean isOnLadder()
+    {
+        return this.isBesideClimbableBlock();
+    }
 
-	// This vanilla method has nothing to do with the custom despawn() method.
-	@Override protected boolean canDespawn(){
-		return getCaster() == null && getOwnerId() == null;
-	}
+    /**
+     * Sets the Entity inside a web block.
+     */
+    public void setInWeb() {}
 
-	@Override
-	public boolean getCanSpawnHere(){
-		return this.world.getDifficulty() != EnumDifficulty.PEACEFUL;
-	}
+    /**
+     * Get this Entity's EnumCreatureAttribute
+     */
+    public EnumCreatureAttribute getCreatureAttribute()
+    {
+        return EnumCreatureAttribute.ARTHROPOD;
+    }
 
-	@Override
-	public boolean canAttackClass(Class<? extends EntityLivingBase> entityType){
-		// Returns true unless the given entity type is a flying entity.
-		return !EntityFlying.class.isAssignableFrom(entityType);
-	}
+    public boolean isPotionApplicable(PotionEffect par1PotionEffect)
+    {
+        return par1PotionEffect.getPotionID() == Potion.poison.id ? false : super.isPotionApplicable(par1PotionEffect);
+    }
 
-	@Override
-	public ITextComponent getDisplayName(){
-		if(getCaster() != null){
-			return new TextComponentTranslation(NAMEPLATE_TRANSLATION_KEY, getCaster().getName(),
-					new TextComponentTranslation("entity." + this.getEntityString() + ".name"));
-		}else{
-			return super.getDisplayName();
-		}
-	}
+    /**
+     * Returns true if the WatchableObject (Byte) is 0x01 otherwise returns false. The WatchableObject is updated using
+     * setBesideClimableBlock.
+     */
+    public boolean isBesideClimbableBlock()
+    {
+        return (this.dataWatcher.getWatchableObjectByte(16) & 1) != 0;
+    }
 
-	@Override
-	public boolean hasCustomName(){
-		// If this returns true, the renderer will show the nameplate when looking directly at the entity
-		return Wizardry.settings.summonedCreatureNames && getCaster() != null;
-	}
+    /**
+     * Updates the WatchableObject (Byte) created in entityInit(), setting it to 0x01 if par1 is true or 0x00 if it is
+     * false.
+     */
+    public void setBesideClimbableBlock(boolean par1)
+    {
+        byte b0 = this.dataWatcher.getWatchableObjectByte(16);
+
+        if (par1)
+        {
+            b0 = (byte)(b0 | 1);
+        }
+        else
+        {
+            b0 &= -2;
+        }
+
+        this.dataWatcher.updateObject(16, Byte.valueOf(b0));
+    }
+/*
+    public boolean attackEntityAsMob(Entity par1Entity)
+    {
+        if (super.attackEntityAsMob(par1Entity))
+        {
+            if (par1Entity instanceof EntityLivingBase)
+            {
+                byte b0 = 0;
+
+                if (this.worldObj.difficultySetting > 1)
+                {
+                    if (this.worldObj.difficultySetting == 2)
+                    {
+                        b0 = 7;
+                    }
+                    else if (this.worldObj.difficultySetting == 3)
+                    {
+                        b0 = 15;
+                    }
+                }
+
+                if (b0 > 0)
+                {
+                    ((EntityLivingBase)par1Entity).addPotionEffect(new PotionEffect(Potion.poison.id, b0 * 20, 0));
+                }
+            }
+
+            return true;
+        }
+        else
+        {
+            return false;
+        }
+    }
+*/
+    public IEntityLivingData onSpawnWithEgg(IEntityLivingData par1EntityLivingData)
+    {
+        return par1EntityLivingData;
+    }
 }

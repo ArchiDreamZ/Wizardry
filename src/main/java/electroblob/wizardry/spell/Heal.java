@@ -1,48 +1,64 @@
 package electroblob.wizardry.spell;
 
-import electroblob.wizardry.item.ItemArtefact;
-import electroblob.wizardry.registry.WizardryItems;
-import electroblob.wizardry.util.SpellModifiers;
+import electroblob.wizardry.EnumElement;
+import electroblob.wizardry.EnumParticleType;
+import electroblob.wizardry.EnumSpellType;
+import electroblob.wizardry.EnumTier;
+import electroblob.wizardry.Wizardry;
+import electroblob.wizardry.WizardryUtilities;
+import net.minecraft.entity.EntityLiving;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.item.EnumAction;
+import net.minecraft.world.World;
 
-public class Heal extends SpellBuff {
+public class Heal extends Spell {
 
-	public Heal(){
-		super("heal", 1, 1, 0.3f);
-		this.soundValues(0.7f, 1.2f, 0.4f);
-		addProperties(HEALTH);
+	public Heal() {
+		super(EnumTier.BASIC, 5, EnumElement.HEALING, "heal", EnumSpellType.DEFENCE, 40, EnumAction.bow, false);
 	}
-	
+
 	@Override
-	protected boolean applyEffects(EntityLivingBase caster, SpellModifiers modifiers){
+	public boolean cast(World world, EntityPlayer caster, int ticksInUse, float damageMultiplier, float rangeMultiplier, float durationMultiplier, float blastMultiplier) {
+
+		if(caster.shouldHeal()){
+
+			caster.heal((int)(2*damageMultiplier));
+
+			if(world.isRemote){
+				for(int i=0; i<10; i++){
+					double d0 = (double)((float)caster.posX + world.rand.nextFloat()*2 - 1.0F);
+					// Apparently the client side spawns the particles 1 block higher than it should... hence the - 0.5F.
+					double d1 = (double)((float)WizardryUtilities.getPlayerEyesPos(caster) - 0.5F + world.rand.nextFloat());
+					double d2 = (double)((float)caster.posZ + world.rand.nextFloat()*2 - 1.0F);
+					Wizardry.proxy.spawnParticle(EnumParticleType.SPARKLE, world, d0, d1, d2, 0, 0.1F, 0, 48 + world.rand.nextInt(12), 1.0f, 1.0f, 0.3f);
+				}
+			}
+
+			world.playSoundAtEntity(caster, "wizardry:heal", 0.7F, world.rand.nextFloat() * 0.4F + 1.0F);
+			return true;
+		}
+		return false;
+	}
+
+	@Override
+	public boolean cast(World world, EntityLiving caster, EntityLivingBase target, float damageMultiplier, float rangeMultiplier, float durationMultiplier, float blastMultiplier){
 		
-		if(caster.getHealth() < caster.getMaxHealth() && caster.getHealth() > 0){
-			heal(caster, getProperty(HEALTH).floatValue() * modifiers.get(SpellModifiers.POTENCY));
+		if(caster.getHealth() < caster.getMaxHealth()){
+			caster.heal((int)(2*damageMultiplier));
+			if(world.isRemote){
+				for(int i=0; i<10; i++){
+					double dx = (double)((float)caster.posX + world.rand.nextFloat()*2 - 1.0F);
+					double dy = (double)((float)caster.posY + caster.getEyeHeight() - 0.5F + world.rand.nextFloat());
+					double dz = (double)((float)caster.posZ + world.rand.nextFloat()*2 - 1.0F);
+					Wizardry.proxy.spawnParticle(EnumParticleType.SPARKLE, world, dx, dy, dz, 0, 0.1F, 0, 48 + world.rand.nextInt(12), 1.0f, 1.0f, 0.3f);
+				}
+			}
+			world.playSoundAtEntity(caster, "wizardry:heal", 0.7F, world.rand.nextFloat() * 0.4F + 1.0F);
 			return true;
 		}
 		
 		return false;
-	}
-
-	/**
-	 * Heals the given entity by the given amount, accounting for special behaviour from artefacts. This does not check
-	 * whether the entity is already on full health or not.
-	 * @param entity The entity to heal
-	 * @param health The number of half-hearts to heal
-	 */
-	public static void heal(EntityLivingBase entity, float health){
-
-		float excessHealth = entity.getHealth() + health - entity.getMaxHealth();
-
-		entity.heal(health);
-
-		// If the player is able to heal, they can't possibly have absorption hearts, so no need to check!
-		if(excessHealth > 0 && entity instanceof EntityPlayer
-				&& ItemArtefact.isArtefactActive((EntityPlayer)entity, WizardryItems.amulet_absorption)){
-			entity.setAbsorptionAmount(excessHealth);
-		}
-
 	}
 
 }

@@ -1,124 +1,128 @@
 package electroblob.wizardry.spell;
 
-import com.google.common.collect.BiMap;
-import com.google.common.collect.HashBiMap;
+import electroblob.wizardry.EnumElement;
+import electroblob.wizardry.EnumParticleType;
+import electroblob.wizardry.EnumSpellType;
+import electroblob.wizardry.EnumTier;
 import electroblob.wizardry.Wizardry;
-import electroblob.wizardry.entity.living.*;
-import electroblob.wizardry.item.SpellActions;
-import electroblob.wizardry.util.EntityUtils;
-import electroblob.wizardry.util.NBTExtras;
-import electroblob.wizardry.util.ParticleBuilder;
-import electroblob.wizardry.util.ParticleBuilder.Type;
-import electroblob.wizardry.util.SpellModifiers;
+import electroblob.wizardry.WizardryUtilities;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLiving;
 import net.minecraft.entity.EntityLivingBase;
-import net.minecraft.entity.monster.*;
-import net.minecraft.entity.passive.*;
-import net.minecraft.nbt.NBTTagCompound;
-import net.minecraft.util.EnumFacing;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.entity.monster.EntityCaveSpider;
+import net.minecraft.entity.monster.EntityMagmaCube;
+import net.minecraft.entity.monster.EntityPigZombie;
+import net.minecraft.entity.monster.EntitySkeleton;
+import net.minecraft.entity.monster.EntitySlime;
+import net.minecraft.entity.monster.EntitySpider;
+import net.minecraft.entity.monster.EntityWitch;
+import net.minecraft.entity.passive.EntityBat;
+import net.minecraft.entity.passive.EntityChicken;
+import net.minecraft.entity.passive.EntityCow;
+import net.minecraft.entity.passive.EntityMooshroom;
+import net.minecraft.entity.passive.EntityPig;
+import net.minecraft.entity.passive.EntityVillager;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.item.EnumAction;
+import net.minecraft.util.MovingObjectPosition;
+import net.minecraft.util.Vec3;
 import net.minecraft.world.World;
 
-public class Metamorphosis extends SpellRay {
+public class Metamorphosis extends Spell {
 
-	public static final BiMap<Class<? extends EntityLivingBase>, Class<? extends EntityLivingBase>> TRANSFORMATIONS = HashBiMap.create();
-
-	static {
-		addTransformation(EntityPig.class, EntityPigZombie.class);
-		addTransformation(EntityCow.class, EntityMooshroom.class);
-		addTransformation(EntityChicken.class, EntityBat.class);
-		addTransformation(EntityZombie.class, EntityHusk.class);
-		addTransformation(EntitySkeleton.class, EntityStray.class, EntityWitherSkeleton.class);
-		addTransformation(EntitySpider.class, EntityCaveSpider.class);
-		addTransformation(EntitySlime.class, EntityMagmaCube.class);
-		addTransformation(EntityZombieMinion.class, EntityHuskMinion.class);
-		addTransformation(EntitySkeletonMinion.class, EntityStrayMinion.class, EntityWitherSkeletonMinion.class);
+	public Metamorphosis() {
+		super(EnumTier.APPRENTICE, 15, EnumElement.NECROMANCY, "metamorphosis", EnumSpellType.UTILITY, 30, EnumAction.none, false);
 	}
-
-	/** Adds circular mappings between the given entity classes to the transformations map. In other words, given an
-	 * array of entity classes [A, B, C, D], adds mappings A -> B, B -> C, C -> D and D -> A. */
-	@SafeVarargs
-	public static void addTransformation(Class<? extends EntityLivingBase>... entities){
-		Class<? extends EntityLivingBase> previousEntity = entities[entities.length - 1];
-		for(Class<? extends EntityLivingBase> entity : entities){
-			TRANSFORMATIONS.put(previousEntity, entity);
-			previousEntity = entity;
-		}
-	}
-	
-	public Metamorphosis(){
-		super("metamorphosis", SpellActions.POINT, false);
-		this.soundValues(0.5f, 1f, 0);
-	}
-	
-	@Override public boolean canBeCastBy(EntityLiving npc, boolean override) { return false; }
 
 	@Override
-	protected boolean onEntityHit(World world, Entity target, Vec3d hit, EntityLivingBase caster, Vec3d origin, int ticksInUse, SpellModifiers modifiers){
-
-		if(EntityUtils.isLiving(target)){
-
-			double xPos = target.posX;
-			double yPos = target.posY;
-			double zPos = target.posZ;
-
-			// Sneaking allows the entities to be cycled through in the other direction.
-			// Dispensers always cycle through entities in the normal direction.
-			Class<? extends EntityLivingBase> newEntityClass = caster != null && caster.isSneaking() ?
-					TRANSFORMATIONS.inverse().get(target.getClass()) : TRANSFORMATIONS.get(target.getClass());
-
-			if(newEntityClass == null) return false;
-
-			EntityLivingBase newEntity = null;
-
-			try {
-				newEntity = newEntityClass.getConstructor(World.class).newInstance(world);
-			} catch (Exception e){
-				Wizardry.logger.error("Error while attempting to transform entity " + target.getClass() + " to entity "
-						+ newEntityClass);
-				e.printStackTrace();
+	public boolean cast(World world, EntityPlayer caster, int ticksInUse, float damageMultiplier, float rangeMultiplier, float durationMultiplier, float blastMultiplier) {
+		
+		Vec3 look = caster.getLookVec();
+		
+		MovingObjectPosition rayTrace = WizardryUtilities.standardEntityRayTrace(world, caster, 10*rangeMultiplier);
+		
+		if(rayTrace != null && rayTrace.entityHit != null && rayTrace.entityHit instanceof EntityLivingBase){
+			
+			Entity entityHit = rayTrace.entityHit;
+			double xPos = entityHit.posX;
+			double yPos = entityHit.posY;
+			double zPos = entityHit.posZ;
+			
+			EntityLiving newEntity = null;
+			boolean flag = false;
+			
+			if(entityHit instanceof EntityPig){
+				newEntity = new EntityPigZombie(world);
+			}
+			else if(entityHit instanceof EntityPigZombie){
+				newEntity = new EntityPig(world);
+			}
+			else if(entityHit instanceof EntitySkeleton){
+				if(((EntitySkeleton)entityHit).getSkeletonType() == 0){
+					((EntitySkeleton)entityHit).setSkeletonType(1);
+				}else{
+					((EntitySkeleton)entityHit).setSkeletonType(0);
+				}
+				flag = true;
+			}
+			else if(entityHit instanceof EntityCow && !(entityHit instanceof EntityMooshroom)){
+				newEntity = new EntityMooshroom(world);
+			}
+			else if(entityHit instanceof EntityMooshroom){
+				newEntity = new EntityCow(world);
+			}
+			else if(entityHit instanceof EntityChicken){
+				newEntity = new EntityBat(world);
+			}
+			else if(entityHit instanceof EntityBat){
+				newEntity = new EntityChicken(world);
+			}
+			else if(entityHit instanceof EntitySlime && !(entityHit instanceof EntityMagmaCube)){
+				newEntity = new EntityMagmaCube(world);
+			}
+			else if(entityHit instanceof EntityMagmaCube){
+				newEntity = new EntitySlime(world);
+			}
+			else if(entityHit instanceof EntitySpider && !(entityHit instanceof EntityCaveSpider)){
+				newEntity = new EntityCaveSpider(world);
+			}
+			else if(entityHit instanceof EntityCaveSpider){
+				newEntity = new EntitySpider(world);
 			}
 			
-			if(newEntity == null) return false;
-
-			if(!world.isRemote){
-				// Transfers attributes from the old entity to the new one.
-				newEntity.setHealth(((EntityLivingBase)target).getHealth());
-				NBTTagCompound tag = new NBTTagCompound();
-				target.writeToNBT(tag);
-				// Remove the UUID because keeping it the same causes the entity to disappear
-				NBTExtras.removeUniqueId(tag, "UUID");
-				newEntity.readFromNBT(tag);
-
-				target.setDead();
-				newEntity.setPosition(xPos, yPos, zPos);
-				world.spawnEntity(newEntity);
+			if(newEntity != null || flag){
 				
-			}else{
-				for(int i=0; i<20; i++){
-					ParticleBuilder.create(Type.DARK_MAGIC, world.rand, xPos, yPos + 1, zPos, 1, false)
-							.clr(0.1f, 0, 0).spawn(world);
+				if(!world.isRemote && newEntity != null){
+				//Transfers attributes from the old entity to the new one.
+				newEntity.setHealth(((EntityLiving)entityHit).getHealth());
+				//newEntity.writeToNBT(entityHit.getEntityData());
+				
+				entityHit.setDead();
+				newEntity.setPosition(xPos, yPos, zPos);
+				world.spawnEntityInWorld(newEntity);
 				}
-				ParticleBuilder.create(Type.BUFF).pos(xPos, yPos, zPos).clr(0xd363cb).spawn(world);
+
+				if(world.isRemote){
+					for(int i=1; i<(int)(25*rangeMultiplier); i+=2){
+						// I figured it out! when on client side, entityplayer.posY is at the eyes, not the feet!
+						double x1 = caster.posX + look.xCoord*i/2 + world.rand.nextFloat()/5 - 0.1f;
+						double y1 = WizardryUtilities.getPlayerEyesPos(caster) - 0.4f + look.yCoord*i/2 + world.rand.nextFloat()/5 - 0.1f;
+						double z1 = caster.posZ + look.zCoord*i/2 + world.rand.nextFloat()/5 - 0.1f;
+						//world.spawnParticle("mobSpell", x1, y1, z1, -1*look.xCoord, -1*look.yCoord, -1*look.zCoord);
+						Wizardry.proxy.spawnParticle(EnumParticleType.SPARKLE, world, x1, y1, z1, 0.0d, 0.0d, 0.0d, 12 + world.rand.nextInt(8), 0.2f, 0.0f, 0.1f);
+					}
+					for(int i=0;i<5;i++){
+						Wizardry.proxy.spawnParticle(EnumParticleType.DARK_MAGIC, world, xPos, yPos, zPos, 0.0d, 0.0d, 0.0d, 0, 0.1f, 0.0f, 0.0f);
+		    		}
+				}
+				
+				caster.swingItem();
+				world.playSoundAtEntity(caster, "wizardry:effect", 0.5F, 0.8f);
+				return true;
 			}
-
-			this.playSound(world, (EntityLivingBase)target, ticksInUse, -1, modifiers);
-			return true;
 		}
-		
 		return false;
 	}
 
-	@Override
-	protected boolean onBlockHit(World world, BlockPos pos, EnumFacing side, Vec3d hit, EntityLivingBase caster, Vec3d origin, int ticksInUse, SpellModifiers modifiers){
-		return false;
-	}
-
-	@Override
-	protected boolean onMiss(World world, EntityLivingBase caster, Vec3d origin, Vec3d direction, int ticksInUse, SpellModifiers modifiers){
-		return false;
-	}
 
 }

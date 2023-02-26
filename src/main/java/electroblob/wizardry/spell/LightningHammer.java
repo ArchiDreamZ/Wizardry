@@ -1,34 +1,59 @@
 package electroblob.wizardry.spell;
 
+import electroblob.wizardry.EnumElement;
+import electroblob.wizardry.EnumSpellType;
+import electroblob.wizardry.EnumTier;
+import electroblob.wizardry.WizardryUtilities;
 import electroblob.wizardry.entity.construct.EntityHammer;
-import electroblob.wizardry.util.SpellModifiers;
-import net.minecraft.entity.EntityLivingBase;
-import net.minecraft.util.EnumFacing;
-import net.minecraft.util.math.BlockPos;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.item.EnumAction;
+import net.minecraft.util.MovingObjectPosition;
+import net.minecraft.util.MovingObjectPosition.MovingObjectType;
 import net.minecraft.world.World;
 
-public class LightningHammer extends SpellConstructRanged<EntityHammer> {
+public class LightningHammer extends Spell {
 
-	public static final String ATTACK_INTERVAL = "attack_interval";
-	public static final String SECONDARY_MAX_TARGETS = "secondary_max_targets";
-
-	public LightningHammer(){
-		super("lightning_hammer", EntityHammer::new, false);
-		this.soundValues(3, 1, 0);
-		this.floor(true);
-		this.overlap(true);
-		addProperties(EFFECT_RADIUS, SECONDARY_MAX_TARGETS, ATTACK_INTERVAL, DIRECT_DAMAGE, SPLASH_DAMAGE);
+	public LightningHammer() {
+		super(EnumTier.MASTER, 250, EnumElement.LIGHTNING, "lightning_hammer", EnumSpellType.ATTACK, 300, EnumAction.bow, false);
 	}
 
 	@Override
-	protected boolean spawnConstruct(World world, double x, double y, double z, EnumFacing side, EntityLivingBase caster, SpellModifiers modifiers){
-		if(!world.canBlockSeeSky(new BlockPos(x, y, z))) return false;
-		return super.spawnConstruct(world, x, y + 50, z, side, caster, modifiers);
+	public boolean doesSpellRequirePacket(){
+		return false;
 	}
 
 	@Override
-	protected void addConstructExtras(EntityHammer construct, EnumFacing side, EntityLivingBase caster, SpellModifiers modifiers){
-		construct.motionY = -2;
+	public boolean cast(World world, EntityPlayer caster, int ticksInUse, float damageMultiplier, float rangeMultiplier, float durationMultiplier, float blastMultiplier) {
+		
+		MovingObjectPosition rayTrace = WizardryUtilities.rayTrace(40*rangeMultiplier, world, caster, false);
+		
+		if(rayTrace != null && rayTrace.typeOfHit == MovingObjectType.BLOCK){
+
+			int x = rayTrace.blockX;
+			int y = rayTrace.blockY;
+			int z = rayTrace.blockZ;
+
+        	// Not sure why it is +1 but it has to be to work properly.
+        	if(world.canBlockSeeTheSky(x, y+1, z)){
+        		
+				if(!world.isRemote){
+					
+					EntityHammer hammer = new EntityHammer(world, x+0.5, y + 50, z+0.5, caster, (int)(600*durationMultiplier), damageMultiplier);
+					
+					hammer.motionX = 0;
+					hammer.motionY = -2;
+					hammer.motionZ = 0;
+					
+					world.spawnEntityInWorld(hammer);
+				}
+				
+				caster.swingItem();
+				world.playSoundAtEntity(caster, "wizardry:darkaura", 3.0f, 1.0f);
+				return true;
+        	}
+		}
+		return false;
 	}
+
 
 }

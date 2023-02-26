@@ -1,116 +1,102 @@
 package electroblob.wizardry.spell;
 
-import electroblob.wizardry.block.BlockStatue;
-import electroblob.wizardry.item.SpellActions;
-import electroblob.wizardry.registry.WizardryBlocks;
-import electroblob.wizardry.registry.WizardryItems;
-import electroblob.wizardry.registry.WizardrySounds;
-import electroblob.wizardry.util.BlockUtils;
-import electroblob.wizardry.util.EntityUtils;
-import electroblob.wizardry.util.ParticleBuilder;
-import electroblob.wizardry.util.ParticleBuilder.Type;
-import electroblob.wizardry.util.SpellModifiers;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.EntityLiving;
-import net.minecraft.entity.EntityLivingBase;
-import net.minecraft.util.EnumFacing;
-import net.minecraft.util.SoundEvent;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec3d;
+import electroblob.wizardry.EnumElement;
+import electroblob.wizardry.EnumParticleType;
+import electroblob.wizardry.EnumSpellType;
+import electroblob.wizardry.EnumTier;
+import electroblob.wizardry.Wizardry;
+import electroblob.wizardry.WizardryUtilities;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.item.EnumAction;
+import net.minecraft.util.MovingObjectPosition;
+import net.minecraft.util.Vec3;
 import net.minecraft.world.World;
 
-public class WallOfFrost extends SpellRay {
+public class WallOfFrost extends Spell {
 
-	private static final int MINIMUM_PLACEMENT_RANGE = 2;
-	
-	public WallOfFrost(){
-		super("wall_of_frost", SpellActions.POINT, true);
-		this.particleVelocity(1);
-		this.particleSpacing(0.5);
-		addProperties(DURATION);
-		soundValues(0.5f, 1, 0);
+	public WallOfFrost() {
+		super(EnumTier.MASTER, 50, EnumElement.ICE, "wall_of_frost", EnumSpellType.UTILITY, 0, EnumAction.none, true);
 	}
 
 	@Override
-	protected SoundEvent[] createSounds(){
-		return this.createContinuousSpellSounds();
-	}
-
-	@Override
-	protected void playSound(World world, EntityLivingBase entity, int ticksInUse, int duration, SpellModifiers modifiers, String... sounds){
-		this.playSoundLoop(world, entity, ticksInUse);
-	}
-
-	@Override
-	protected void playSound(World world, double x, double y, double z, int ticksInUse, int duration, SpellModifiers modifiers, String... sounds){
-		this.playSoundLoop(world, x, y, z, ticksInUse, duration);
-	}
-
-	@Override
-	protected boolean onEntityHit(World world, Entity target, Vec3d hit, EntityLivingBase caster, Vec3d origin, int ticksInUse, SpellModifiers modifiers){
-		// Wall of frost now freezes entities solid too!
-		if(target instanceof EntityLiving && !world.isRemote){
-			// Unchecked cast is fine because the block is a static final field
-			if(((BlockStatue)WizardryBlocks.ice_statue).convertToStatue((EntityLiving)target,
-					caster, (int)(getProperty(DURATION).floatValue() * modifiers.get(WizardryItems.duration_upgrade)))){
-				
-				target.playSound(WizardrySounds.MISC_FREEZE, 1.0F, world.rand.nextFloat() * 0.4F + 0.8F);
-			}
-		}
+	public boolean cast(World world, EntityPlayer caster, int ticksInUse, float damageMultiplier, float rangeMultiplier, float durationMultiplier, float blastMultiplier) {
 		
-		return true;
-	}
-
-	@Override
-	protected boolean onBlockHit(World world, BlockPos pos, EnumFacing side, Vec3d hit, EntityLivingBase caster, Vec3d origin, int ticksInUse, SpellModifiers modifiers){
-
-		if(!world.isRemote && EntityUtils.canDamageBlocks(caster, world)){
-
-			// Stops the ice being placed floating above snow and grass. Directions other than up included for
-			// completeness.
-			if(BlockUtils.canBlockBeReplaced(world, pos)){
-				// Moves the blockpos back into the block
-				pos = pos.offset(side.getOpposite());
-			}
-
-			if(origin.squareDistanceTo(pos.getX(), pos.getY(), pos.getZ()) > MINIMUM_PLACEMENT_RANGE * MINIMUM_PLACEMENT_RANGE
-					&& world.getBlockState(pos).getBlock() != WizardryBlocks.ice_statue && world.getBlockState(pos).getBlock() != WizardryBlocks.dry_frosted_ice){
-
-				pos = pos.offset(side);
-				
-				int duration = (int)(getProperty(DURATION).floatValue() * modifiers.get(WizardryItems.duration_upgrade));
-
-				if(BlockUtils.canBlockBeReplaced(world, pos) && BlockUtils.canPlaceBlock(caster, world, pos)){
-					world.setBlockState(pos, WizardryBlocks.dry_frosted_ice.getDefaultState());
-					world.scheduleUpdate(pos.toImmutable(), WizardryBlocks.dry_frosted_ice, duration);
+		Vec3 look = caster.getLookVec();
+		
+		MovingObjectPosition rayTrace = WizardryUtilities.rayTrace(10*rangeMultiplier, world, caster, true);
+		
+		if(rayTrace != null && !world.isRemote){
+			int x = rayTrace.blockX;
+			int y = rayTrace.blockY;
+			int z = rayTrace.blockZ;
+			
+			// Stops the ice being placed floating above snow and grass. Directions other than up included for completeness.
+			if(WizardryUtilities.canBlockBeReplaced(world, x, y, z)){
+				switch(rayTrace.sideHit){
+				case 0: y++; break;
+				case 1: y--; break;
+				case 2: z++; break;
+				case 3: z--; break;
+				case 4: x++; break;
+				case 5: x--; break;
 				}
-
-				// Builds a 2 block high wall if it hits the ground
-				if(side == EnumFacing.UP){
-					pos = pos.offset(side);
-
-					if(BlockUtils.canBlockBeReplaced(world, pos) && BlockUtils.canPlaceBlock(caster, world, pos)){
-						world.setBlockState(pos, WizardryBlocks.dry_frosted_ice.getDefaultState());
-						world.scheduleUpdate(pos.toImmutable(), WizardryBlocks.dry_frosted_ice, duration);
+			}
+			
+			if(caster.getDistance(x, y, z) > 2 && world.getBlock(x, y, z) != Wizardry.iceStatue){
+			
+				switch(rayTrace.sideHit){
+				case 0:
+					break;
+				case 1:
+					if(WizardryUtilities.canBlockBeReplaced(world, x, y+1, z)){
+						world.setBlock(x, y+1, z, Wizardry.iceStatue);
 					}
+					if(WizardryUtilities.canBlockBeReplaced(world, x, y+2, z)){
+						world.setBlock(x, y+2, z, Wizardry.iceStatue);
+					}
+					break;
+				case 2:
+					if(WizardryUtilities.canBlockBeReplaced(world, x, y, z-1)){
+						world.setBlock(x, y, z-1, Wizardry.iceStatue);
+					}
+					break;
+				case 3:
+					if(WizardryUtilities.canBlockBeReplaced(world, x, y, z+1)){
+						world.setBlock(x, y, z+1, Wizardry.iceStatue);
+					}
+					break;
+				case 4:
+					if(WizardryUtilities.canBlockBeReplaced(world, x-1, y, z)){
+						world.setBlock(x-1, y, z, Wizardry.iceStatue);
+					}
+					break;
+				case 5:
+					if(WizardryUtilities.canBlockBeReplaced(world, x+1, y, z)){
+						world.setBlock(x+1, y, z, Wizardry.iceStatue);
+					}
+					break;
 				}
 			}
 		}
-		
+		for(int i=0; i<20; i++){
+			if(world.isRemote){
+				double x1 = caster.posX + look.xCoord*i/2 + world.rand.nextFloat()/5 - 0.1f;
+				double y1 = WizardryUtilities.getPlayerEyesPos(caster) - 0.4f + look.yCoord*i/2 + world.rand.nextFloat()/5 - 0.1f;
+				double z1 = caster.posZ + look.zCoord*i/2 + world.rand.nextFloat()/5 - 0.1f;
+				Wizardry.proxy.spawnParticle(EnumParticleType.SPARKLE, world, x1, y1, z1, look.xCoord*rangeMultiplier, look.yCoord*rangeMultiplier, look.zCoord*rangeMultiplier, 8 + world.rand.nextInt(12), 0.4f, 0.6f, 1.0f);
+				
+				x1 = caster.posX + look.xCoord*i/2 + world.rand.nextFloat()/5 - 0.1f;
+				y1 = WizardryUtilities.getPlayerEyesPos(caster) - 0.4f + look.yCoord*i/2 + world.rand.nextFloat()/5 - 0.1f;
+				z1 = caster.posZ + look.zCoord*i/2 + world.rand.nextFloat()/5 - 0.1f;
+				Wizardry.proxy.spawnParticle(EnumParticleType.SPARKLE, world, x1, y1, z1, look.xCoord*rangeMultiplier, look.yCoord*rangeMultiplier, look.zCoord*rangeMultiplier, 8 + world.rand.nextInt(12), 1.0f, 1.0f, 1.0f);
+			}
+		}
+		if(ticksInUse % 12 == 0){
+			if(ticksInUse == 0) world.playSoundAtEntity(caster, "wizardry:ice", 0.5F, 1.0f);
+			world.playSoundAtEntity(caster, "wizardry:frostray", 0.5F, 1.0f);
+		}
 		return true;
 	}
 
-	@Override
-	protected boolean onMiss(World world, EntityLivingBase caster, Vec3d origin, Vec3d direction, int ticksInUse, SpellModifiers modifiers){
-		return true;
-	}
-	
-	@Override
-	protected void spawnParticle(World world, double x, double y, double z, double vx, double vy, double vz){
-		float brightness = world.rand.nextFloat();
-		ParticleBuilder.create(Type.SPARKLE).pos(x, y, z).vel(vx, vy, vz).time(8 + world.rand.nextInt(12))
-		.clr(0.4f + 0.6f * brightness, 0.6f + 0.4f*brightness, 1).spawn(world);
-		ParticleBuilder.create(Type.SNOW).pos(x, y, z).vel(vx, vy, vz).time(8 + world.rand.nextInt(12)).spawn(world);
-	}
 
 }
