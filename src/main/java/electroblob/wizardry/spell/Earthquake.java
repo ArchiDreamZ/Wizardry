@@ -16,7 +16,7 @@ import net.minecraft.world.World;
 public class Earthquake extends Spell {
 
 	public Earthquake() {
-		super(EnumTier.MASTER, 9999, EnumElement.EARTH, "earthquake", EnumSpellType.ATTACK, 250, EnumAction.none, false);
+		super(EnumTier.MASTER, 200, EnumElement.EARTH, "earthquake", EnumSpellType.ATTACK, 250, EnumAction.none, false);
 	}
 
 	@Override

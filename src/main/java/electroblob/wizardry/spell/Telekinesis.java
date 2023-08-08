@@ -19,7 +19,7 @@ import net.minecraft.world.World;
 public class Telekinesis extends Spell {
 
 	public Telekinesis() {
-		super(EnumTier.BASIC, 9999, EnumElement.SORCERY, "telekinesis", EnumSpellType.UTILITY, 5, EnumAction.none, false);
+		super(EnumTier.BASIC, 5, EnumElement.SORCERY, "telekinesis", EnumSpellType.UTILITY, 500, EnumAction.none, false);
 	}
 
 	@Override
